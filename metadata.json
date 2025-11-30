@@ -1,0 +1,8 @@
+{
+  "name": "CargoLens XR",
+  "description": "A production-ready full-stack logistics PWA featuring 3D truck loading optimization, camera-based dimension estimation, and India-specific route planning.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
