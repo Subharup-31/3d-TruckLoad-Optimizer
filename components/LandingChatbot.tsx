@@ -64,15 +64,23 @@ export const LandingChatbot: React.FC = () => {
       }));
 
       const response = await OpenRouterService.generateResponse(text, history);
-      if (response) {
-        setMessages(prev => [...prev, { sender: 'bot', text: response }]);
+      if (response.source === 'openrouter' && response.text) {
+        setMessages((prev) => [...prev, { sender: 'bot', text: response.text }]);
       } else {
         const fallback = getBotResponse(text);
-        setMessages(prev => [...prev, { sender: 'bot', text: fallback }]);
+        setMessages((prev) => [
+          ...prev,
+          {
+            sender: 'bot',
+            text: response.error
+              ? `${fallback}\n\n_(AI API: ${response.error.slice(0, 120)})_`
+              : fallback,
+          },
+        ]);
       }
     } catch (e) {
       const fallback = getBotResponse(text);
-      setMessages(prev => [...prev, { sender: 'bot', text: fallback }]);
+      setMessages((prev) => [...prev, { sender: 'bot', text: fallback }]);
     } finally {
       setIsTyping(false);
     }
@@ -110,7 +118,9 @@ export const LandingChatbot: React.FC = () => {
                   AI Logistics Assistant
                   <Sparkles className="w-3.5 h-3.5 text-yellow-300 animate-pulse" />
                 </h3>
-                <span className="text-[10px] text-blue-100 font-medium">LogiLoad Support Agent</span>
+                <span className="text-[10px] text-blue-100 font-medium">
+                  NVIDIA Nemotron (free) · OpenRouter
+                </span>
               </div>
             </div>
             <button

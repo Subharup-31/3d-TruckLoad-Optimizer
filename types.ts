@@ -28,6 +28,8 @@ export interface PlacedItem extends Item {
   position: [number, number, number]; // x, y, z relative to truck origin
   rotation: [number, number, number];
   uuid: string; // Unique ID for this specific instance
+  /** Order in which the item was placed during load planning (for play sequence) */
+  sequenceOrder?: number;
 }
 
 export interface LoadResult {
@@ -48,12 +50,27 @@ export interface RouteStop {
   lng?: number;
 }
 
+export interface RouteAlgorithmStep {
+  step: number;
+  from: string;
+  to: string;
+  distanceKm: number;
+  reason: string;
+}
+
 export interface RouteResult {
   stops: RouteStop[];
   totalDistanceKm: number;
   totalDurationMins: number;
   overviewPolyline: string;
   intermodalPolyline?: string;
+  hubSequence?: string[];
+  /** Algorithm diagnostics for road routing */
+  sequenceAlgorithm?: string;
+  routingEngine?: string;
+  algorithmTrace?: RouteAlgorithmStep[];
+  geometryPointCount?: number;
+  usedRoadNetwork?: boolean;
 }
 
 // Driver interface

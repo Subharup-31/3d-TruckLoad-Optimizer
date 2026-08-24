@@ -2,10 +2,14 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Text, Float, PerspectiveCamera, Environment, Edges } from '@react-three/drei';
 import { StorageService } from '../services/storage';
-import { packTruck } from '../services/packer';
+import { packCargo, getLoadingSequence } from '../services/packer';
+import { useLoadPlaySequence } from '../hooks/useLoadPlaySequence';
+import { LoadPlaySequenceButton } from '../components/LoadPlaySequenceButton';
 import { Truck, Item, PlacedItem, LoadResult } from '../types';
 import { Plane, Package, Zap, Wind, Shield, Info, AlertCircle, RefreshCw, BarChart3, Cloud, Anchor } from 'lucide-react';
 import { AIRCRAFT_OPTIONS } from '../constants';
+import { LoadAiInsightPanel } from '../components/LoadAiInsightPanel';
+import { CoGIndicator } from '../components/CoGIndicator';
 import * as THREE from 'three';
 
 // -- 3D COMPONENTS --
@@ -504,6 +508,12 @@ export const AirOptimizer: React.FC = () => {
   const [loadResult, setLoadResult] = useState<LoadResult | null>(null);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [viewMode, setViewMode] = useState<'3d' | 'stats'>('3d');
+  const [focusCoG, setFocusCoG] = useState(false);
+
+  const loadingSequence = loadResult ? getLoadingSequence(loadResult.placedItems) : [];
+  const { playMode, playIndex, visibleCount, toggle: togglePlay, stop: stopPlay } = useLoadPlaySequence(
+    loadingSequence.length
+  );
 
   useEffect(() => {
     let storedItems = StorageService.getItems();
@@ -525,8 +535,9 @@ export const AirOptimizer: React.FC = () => {
   const handleOptimize = (targetItems: Item[] = items, truck: Truck = selectedPlane) => {
     setIsOptimizing(true);
     // Use the same packer - physics is the same, just bigger dimensions
-    const result = packTruck(truck, targetItems);
+    const result = packCargo(truck, targetItems, 'air');
     setLoadResult(result);
+    stopPlay();
     setTimeout(() => setIsOptimizing(false), 800);
   };
 
@@ -539,7 +550,8 @@ export const AirOptimizer: React.FC = () => {
   return (
     <div className="flex h-[calc(100vh-64px)] bg-slate-950 text-white overflow-hidden">
       {/* Left Control Panel */}
-      <div className="w-80 bg-slate-900 border-r border-slate-800 p-6 flex flex-col gap-6 shadow-2xl z-10">
+      <div className="w-80 bg-slate-900 border-r border-slate-800 flex flex-col shadow-2xl z-10 min-h-0">
+        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-5 custom-scrollbar">
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2 text-blue-400">
             <Plane className="w-6 h-6" />
@@ -548,7 +560,7 @@ export const AirOptimizer: React.FC = () => {
           <p className="text-slate-400 text-xs mt-1">Global Aviation Logistics Engine</p>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-3">
           <label className="block text-sm font-medium text-slate-300">Select Aircraft</label>
           <div className="grid gap-2">
             {AIRCRAFT_OPTIONS.map(plane => (
@@ -571,114 +583,50 @@ export const AirOptimizer: React.FC = () => {
           </div>
         </div>
 
-        <div className="space-y-4">
-          <label className="block text-sm font-medium text-slate-300">Route Intelligence</label>
-          <div className="space-y-2">
-            <div className="relative">
-              <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+        {/* AI Stability — prominent, same as truck sidebar */}
+        {loadResult ? (
+          <LoadAiInsightPanel
+            mode="air"
+            vehicle={selectedPlane}
+            loadResult={loadResult}
+            theme="dark"
+            focusCoG={focusCoG}
+            onToggleFocusCoG={() => setFocusCoG((v) => !v)}
+          />
+        ) : (
+          <div className="p-4 rounded-xl border border-slate-700 bg-slate-800/50 text-center text-xs text-slate-400">
+            Run <span className="text-blue-400 font-semibold">Calculate Flight Load</span> to see AI Stability Analysis.
+          </div>
+        )}
+
+        {loadResult && (
+          <div className="space-y-3">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Utilization</h3>
+            <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700">
+              <div className="flex justify-between text-xs mb-1">
+                <span className="text-slate-400">Volume</span>
+                <span className="text-blue-400 font-bold">{loadResult.volumeUtilization.toFixed(1)}%</span>
               </div>
-              <select className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-8 pr-4 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none appearance-none">
-                <option>Origin: Bengaluru (BLR)</option>
-                <option>Delhi (DEL)</option>
-                <option>Mumbai (BOM)</option>
-                <option>Dubai (DXB)</option>
-                <option>London (LHR)</option>
-              </select>
+              <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-500" style={{ width: `${loadResult.volumeUtilization}%` }}></div>
+              </div>
             </div>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                <div className="w-2 h-2 rounded-full bg-red-500"></div>
+            <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700">
+              <div className="flex justify-between text-xs mb-1">
+                <span className="text-slate-400">Weight & Balance</span>
+                <span className={loadResult.weightUtilization > 95 ? 'text-red-400' : 'text-green-400'}>
+                  {loadResult.weightUtilization.toFixed(1)}%
+                </span>
               </div>
-              <select className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-8 pr-4 py-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none appearance-none">
-                <option>Dest: London (LHR)</option>
-                <option>New York (JFK)</option>
-                <option>Singapore (SIN)</option>
-                <option>Frankfurt (FRA)</option>
-                <option>Tokyo (NRT)</option>
-              </select>
+              <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                <div className={`h-full ${loadResult.weightUtilization > 95 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${loadResult.weightUtilization}%` }}></div>
+              </div>
             </div>
           </div>
-          <div className="bg-blue-600/10 border border-blue-500/20 rounded-xl p-3 space-y-2">
-             <div className="flex justify-between text-[10px]">
-                <span className="text-slate-400">Est. Distance</span>
-                <span className="text-blue-300 font-mono">8,054 km</span>
-             </div>
-             <div className="flex justify-between text-[10px]">
-                <span className="text-slate-400">Flight Duration</span>
-                <span className="text-blue-300 font-mono">10h 15m</span>
-             </div>
-             <div className="flex justify-between text-[10px]">
-                <span className="text-slate-400">Fuel Requirement</span>
-                <span className="text-orange-400 font-mono">92,400 L</span>
-             </div>
-          </div>
+        )}
         </div>
 
-        <div className="space-y-4">
-          <label className="block text-sm font-medium text-slate-300">AI Flight Path Optimizer</label>
-          <div className="flex gap-2">
-            {['Fastest', 'Eco', 'Heavy'].map(mode => (
-              <button key={mode} className="flex-1 py-1.5 px-2 bg-slate-800 border border-slate-700 rounded-lg text-[10px] hover:border-blue-500 transition-colors">
-                {mode}
-              </button>
-            ))}
-          </div>
-          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 space-y-1">
-             <div className="flex justify-between text-[10px]">
-                <span className="text-slate-400">Route Efficiency</span>
-                <span className="text-emerald-400 font-bold">98.2%</span>
-             </div>
-             <div className="text-[9px] text-slate-500 italic">Optimized for Jet Stream tailwinds</div>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <label className="block text-sm font-medium text-slate-300">Auto-Trim & CoG Balancer</label>
-          <div className="bg-slate-800/80 backdrop-blur-sm border border-slate-700 rounded-xl p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center border border-blue-500/40">
-                <Shield className="w-4 h-4 text-blue-400" />
-              </div>
-              <div className="text-xs">
-                <div className="font-bold">Autonomous Balance</div>
-                <div className="text-green-400 text-[10px]">OPTIMIZED</div>
-              </div>
-            </div>
-            <div className="w-12 h-6 bg-blue-600/30 rounded-full relative flex items-center px-1">
-               <div className="w-4 h-4 bg-blue-400 rounded-full shadow-[0_0_10px_rgba(96,165,250,0.5)] translate-x-6"></div>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-4 flex-grow">
-          <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Flight Stability</h3>
-          {loadResult && (
-            <div className="space-y-3">
-              <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700">
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-slate-400">Volume Util.</span>
-                  <span className="text-blue-400 font-bold">{loadResult.volumeUtilization.toFixed(1)}%</span>
-                </div>
-                <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500" style={{ width: `${loadResult.volumeUtilization}%` }}></div>
-                </div>
-              </div>
-              <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700">
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-slate-400">Weight & Balance</span>
-                  <span className={loadResult.weightUtilization > 95 ? 'text-red-400' : 'text-green-400'}>
-                    {loadResult.weightUtilization.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                  <div className={`h-full ${loadResult.weightUtilization > 95 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${loadResult.weightUtilization}%` }}></div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
+        <div className="p-6 pt-4 border-t border-slate-800 shrink-0">
         <button 
           onClick={() => handleOptimize()}
           disabled={isOptimizing}
@@ -687,6 +635,7 @@ export const AirOptimizer: React.FC = () => {
           {isOptimizing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5 fill-current" />}
           CALCULATE FLIGHT LOAD
         </button>
+        </div>
       </div>
 
       {/* Main 3D Canvas */}
@@ -703,6 +652,13 @@ export const AirOptimizer: React.FC = () => {
         </div>
 
         <div className="absolute top-6 right-6 z-10 flex gap-2">
+          <LoadPlaySequenceButton
+            playMode={playMode}
+            playIndex={playIndex}
+            total={loadingSequence.length}
+            onToggle={togglePlay}
+            variant="dark"
+          />
           <button 
             onClick={() => setViewMode('3d')}
             className={`p-2 rounded-lg border transition-all ${viewMode === '3d' ? 'bg-blue-600 border-blue-500' : 'bg-slate-900/80 border-slate-700'}`}
@@ -740,20 +696,30 @@ export const AirOptimizer: React.FC = () => {
             
             <PlaneContainer dimensions={{ l: selectedPlane.dimensions.length, w: selectedPlane.dimensions.width, h: selectedPlane.dimensions.height }} />
             
-            {loadResult?.placedItems.map((item, index) => (
-              <AnimatedBox 
-                key={item.uuid}
-                targetPosition={[
-                  item.position[2] + item.dimensions.width / 2,
-                  item.position[1] + item.dimensions.height / 2 + 5,
-                  item.position[0] + item.dimensions.length / 2
-                ]} 
-                args={[item.dimensions.width, item.dimensions.height, item.dimensions.length]}
-                color={item.color}
-                delay={index * 0.02}
-                name={item.name}
+            {!focusCoG &&
+              loadingSequence.slice(0, visibleCount).map((item, index) => (
+                <AnimatedBox
+                  key={item.uuid}
+                  targetPosition={[
+                    item.position[2] + item.dimensions.width / 2,
+                    item.position[1] + item.dimensions.height / 2 + 5,
+                    item.position[0] + item.dimensions.length / 2,
+                  ]}
+                  args={[item.dimensions.width, item.dimensions.height, item.dimensions.length]}
+                  color={item.color}
+                  delay={playMode ? 0 : index * 0.02}
+                  name={item.name}
+                />
+              ))}
+
+            {loadResult?.centerOfGravity && (
+              <CoGIndicator
+                cog={loadResult.centerOfGravity}
+                floorOffset={5}
+                radius={focusCoG ? 60 : 35}
+                emphasized={focusCoG}
               />
-            ))}
+            )}
           </Canvas>
         ) : (
           <div className="p-10 h-full overflow-auto">
@@ -807,7 +773,6 @@ export const AirOptimizer: React.FC = () => {
           </div>
         )}
 
-        {/* Weight & Balance HUD Overlay */}
         {loadResult && (
           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-950/85 backdrop-blur-md p-4 rounded-xl border border-white/10 flex flex-col gap-4 shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-20 pointer-events-none w-[360px]">
             {/* Slider 1: CG Limits */}

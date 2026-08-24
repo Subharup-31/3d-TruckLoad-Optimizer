@@ -2,10 +2,14 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Text, Float, PerspectiveCamera, Environment, Edges } from '@react-three/drei';
 import { StorageService } from '../services/storage';
-import { packTruck } from '../services/packer';
+import { packCargo, getLoadingSequence } from '../services/packer';
+import { useLoadPlaySequence } from '../hooks/useLoadPlaySequence';
+import { LoadPlaySequenceButton } from '../components/LoadPlaySequenceButton';
 import { Truck, Item, PlacedItem, LoadResult } from '../types';
 import { Anchor, Package, Zap, Waves, Shield, Info, AlertCircle, RefreshCw, BarChart3, Droplets } from 'lucide-react';
 import { VESSEL_OPTIONS } from '../constants';
+import { LoadAiInsightPanel } from '../components/LoadAiInsightPanel';
+import { CoGIndicator } from '../components/CoGIndicator';
 import * as THREE from 'three';
 
 // -- 3D COMPONENTS --
@@ -417,6 +421,12 @@ export const SeaOptimizer: React.FC = () => {
   const [items, setItems] = useState<Item[]>([]);
   const [loadResult, setLoadResult] = useState<LoadResult | null>(null);
   const [isOptimizing, setIsOptimizing] = useState(false);
+  const [focusCoG, setFocusCoG] = useState(false);
+
+  const loadingSequence = loadResult ? getLoadingSequence(loadResult.placedItems) : [];
+  const { playMode, playIndex, visibleCount, toggle: togglePlay, stop: stopPlay } = useLoadPlaySequence(
+    loadingSequence.length
+  );
 
   useEffect(() => {
     let storedItems = StorageService.getItems();
@@ -433,8 +443,9 @@ export const SeaOptimizer: React.FC = () => {
 
   const handleOptimize = (targetItems: Item[] = items, vessel: Truck = selectedVessel) => {
     setIsOptimizing(true);
-    const result = packTruck(vessel, targetItems);
+    const result = packCargo(vessel, targetItems, 'sea');
     setLoadResult(result);
+    stopPlay();
     setTimeout(() => setIsOptimizing(false), 1000);
   };
 
@@ -511,6 +522,17 @@ export const SeaOptimizer: React.FC = () => {
           </div>
         </div>
 
+        {loadResult && (
+          <LoadAiInsightPanel
+            mode="sea"
+            vehicle={selectedVessel}
+            loadResult={loadResult}
+            theme="light"
+            focusCoG={focusCoG}
+            onToggleFocusCoG={() => setFocusCoG((v) => !v)}
+          />
+        )}
+
         <div className="mt-auto">
           <button 
             onClick={() => handleOptimize()}
@@ -532,6 +554,16 @@ export const SeaOptimizer: React.FC = () => {
            </div>
         </div>
 
+        <div className="absolute top-10 right-10 z-20 flex gap-2">
+          <LoadPlaySequenceButton
+            playMode={playMode}
+            playIndex={playIndex}
+            total={loadingSequence.length}
+            onToggle={togglePlay}
+            variant="dark"
+          />
+        </div>
+
         <Canvas shadows camera={{ position: [1500, 1000, 1500], fov: 45, far: 20000 }}>
           <color attach="background" args={['#090d16']} />
           <OrbitControls makeDefault target={[selectedVessel.dimensions.width/2, 0, selectedVessel.dimensions.length/2]} />
@@ -547,20 +579,29 @@ export const SeaOptimizer: React.FC = () => {
             }} 
           />
 
-          {loadResult?.placedItems.filter(item => item.position).map((item, index) => (
-            <AnimatedBox
-              key={item.uuid}
-              targetPosition={[
-                item.position[2] + item.dimensions.width / 2, 
-                item.position[1] + item.dimensions.height / 2, 
-                item.position[0] + item.dimensions.length / 2
-              ]}
-              args={[item.dimensions.width, item.dimensions.height, item.dimensions.length]}
-              color={item.color}
-              delay={Math.min(index * 0.02, 1.0)}
-              name={item.name}
+          {!focusCoG &&
+            loadingSequence.slice(0, visibleCount).map((item, index) => (
+                <AnimatedBox
+                  key={item.uuid}
+                  targetPosition={[
+                    item.position[2] + item.dimensions.width / 2,
+                    item.position[1] + item.dimensions.height / 2,
+                    item.position[0] + item.dimensions.length / 2,
+                  ]}
+                  args={[item.dimensions.width, item.dimensions.height, item.dimensions.length]}
+                  color={item.color}
+                  delay={playMode ? 0 : Math.min(index * 0.02, 1.0)}
+                  name={item.name}
+                />
+              ))}
+
+          {loadResult?.centerOfGravity && (
+            <CoGIndicator
+              cog={loadResult.centerOfGravity}
+              radius={focusCoG ? 40 : 25}
+              emphasized={focusCoG}
             />
-          ))}
+          )}
         </Canvas>
 
         {loadResult && (

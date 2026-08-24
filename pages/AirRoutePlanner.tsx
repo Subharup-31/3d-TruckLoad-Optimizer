@@ -20,6 +20,12 @@ export const AirRoutePlanner: React.FC = () => {
     handleOptimize();
   }, []);
 
+  useEffect(() => {
+    if (result && stops.length >= 2) {
+      handleOptimize();
+    }
+  }, [optimizerMode]);
+
   const addStop = () => {
     setStops([...stops, { id: Date.now().toString(), address: '', city: '' }]);
   };
@@ -36,18 +42,25 @@ export const AirRoutePlanner: React.FC = () => {
       return;
     }
 
+    const empty = stops.some((s) => !s.address?.trim());
+    if (empty) {
+      setError('Please search and select an airport or city for every waypoint.');
+      return;
+    }
+
     setLoading(true);
     setError('');
     try {
       // Use the dedicated air route optimizer for geodesic flight paths
       const res = await optimizeAirRoute(stops, optimizerMode);
-      
-      // Fetch live Jet Stream data for the midpoint of the route
-      const midIdx = Math.floor(stops.length / 2);
-      const liveWind = await getJetStreamData(stops[midIdx].lat!, stops[midIdx].lng!);
-      
-      // Calculate bearing and tailwind component
-      const bearing = calculateBearing([stops[0].lat!, stops[0].lng!], [stops[1].lat!, stops[1].lng!]);
+
+      const midIdx = Math.floor(res.stops.length / 2);
+      const liveWind = await getJetStreamData(res.stops[midIdx].lat!, res.stops[midIdx].lng!);
+
+      const bearing = calculateBearing(
+        [res.stops[0].lat!, res.stops[0].lng!],
+        [res.stops[res.stops.length - 1].lat!, res.stops[res.stops.length - 1].lng!]
+      );
       const relativeAngle = (liveWind.direction - bearing + 180) % 360 - 180;
       const tailwindComponent = liveWind.speed * Math.cos(relativeAngle * Math.PI / 180);
       
@@ -147,6 +160,7 @@ export const AirRoutePlanner: React.FC = () => {
                         }}
                         placeholder="Search Airport or City..."
                         global={true}
+                        category="airport"
                       />
                       <div className="mt-2 flex items-center gap-2">
                         <Navigation className="w-3 h-3 text-blue-500" />
@@ -190,11 +204,21 @@ export const AirRoutePlanner: React.FC = () => {
                     style={{ width: `${Math.min(Math.abs((windData?.tailwind || 0) / 2), 100)}%` }}
                   ></div>
                 </div>
-                <p className="text-[10px] text-slate-500">
+                <p className="text-[10px] text-slate-500 leading-relaxed">
                   {windData 
-                    ? `Live wind from ${windData.direction}° at ${windData.speed} km/h.`
-                    : "Current conditions favor high-altitude cruise for fastest mode."}
+                    ? `Live wind from ${windData.direction}° at ${windData.speed} km/h along your route midpoint.`
+                    : "Fetching cruise-altitude wind data for eco route planning."}
                 </p>
+                <div className="mt-3 p-3 rounded-lg bg-slate-800/50 border border-slate-700/50 space-y-1.5">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-indigo-400">How this works</p>
+                  <p className="text-[9px] text-slate-400 leading-relaxed">
+                    Data from <span className="text-slate-300">Open-Meteo</span> at 250 hPa (~34,000 ft cruise altitude).
+                    Tailwind = wind component along your flight bearing — positive saves time/fuel in Eco mode.
+                  </p>
+                  <p className="text-[9px] text-slate-500 leading-relaxed italic">
+                    Forecast-grade for planning; not certified for operational flight planning. Falls back to defaults if the API is unavailable.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -216,7 +240,9 @@ export const AirRoutePlanner: React.FC = () => {
                 </div>
                 <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl">
                   <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Fuel Consumption</div>
-                  <div className="text-xl font-mono text-orange-400 font-bold">{(result as any).fuelRequirement.toLocaleString()} L</div>
+                  <div className="text-xl font-mono text-orange-400 font-bold">
+                    {((result as any).fuelRequirement ?? 0).toLocaleString()} L
+                  </div>
                 </div>
                 <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl">
                   <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Stability Index</div>
@@ -267,6 +293,24 @@ export const AirRoutePlanner: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {result && (
+              <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 space-y-3">
+                <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Flight Path Algorithm</h3>
+                <p className="text-sm text-blue-300">{result.sequenceAlgorithm}</p>
+                <p className="text-[10px] text-slate-500">{result.routingEngine}</p>
+                {result.hubSequence && (
+                  <div className="flex flex-wrap gap-2">
+                    {result.hubSequence.map((node, i) => (
+                      <React.Fragment key={i}>
+                        <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700">{node}</span>
+                        {i < result.hubSequence!.length - 1 && <span className="text-slate-600 text-[10px]">→</span>}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -28,20 +28,20 @@ export const VideoIntro: React.FC<VideoIntroProps> = ({ videoSrc, onVideoEnd }) 
     }, [videoSrc]);
 
     const handleVideoEnd = () => {
-        console.log('✅ Video ended naturally');
+        if (videoRef.current) videoRef.current.pause();
         setIsPlaying(false);
         onVideoEnd();
     };
 
     const handleSkip = () => {
-        console.log('⏭️ User skipped video');
+        if (videoRef.current) videoRef.current.pause();
         setIsPlaying(false);
         onVideoEnd();
     };
 
-    const handleError = (e: any) => {
-        console.error('❌ Video playback error:', e);
-        console.error('Video source:', videoSrc);
+    const handleError = () => {
+        console.error('Video playback error — skipping to landing');
+        handleSkip();
     };
 
     const handleLoadStart = () => {
@@ -74,7 +74,6 @@ export const VideoIntro: React.FC<VideoIntroProps> = ({ videoSrc, onVideoEnd }) 
                 className="w-full h-full object-cover"
                 onEnded={handleVideoEnd}
                 onError={handleError}
-                onLoadStart={handleLoadStart}
                 onCanPlay={handleCanPlay}
                 onLoadedData={handleLoadedData}
                 onPlaying={handlePlaying}
@@ -84,8 +83,6 @@ export const VideoIntro: React.FC<VideoIntroProps> = ({ videoSrc, onVideoEnd }) 
                 preload="auto"
             >
                 <source src={videoSrc} type="video/mp4" />
-                <source src={videoSrc.replace('.mp4', '.webm')} type="video/webm" />
-                Your browser does not support the video tag.
             </video>
 
             {/* Loading indicator - only show while loading */}
@@ -103,7 +100,7 @@ export const VideoIntro: React.FC<VideoIntroProps> = ({ videoSrc, onVideoEnd }) 
                 onClick={handleSkip}
                 className="absolute top-8 right-8 bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white px-6 py-3 rounded-full font-semibold transition-all duration-300 border border-white/30 hover:border-white/50 hover:scale-105"
             >
-                Skip Intro
+            Skip Video
             </button>
         </div>
     );

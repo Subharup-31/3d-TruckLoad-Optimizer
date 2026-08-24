@@ -1,8 +1,17 @@
-import { RouteStop, RouteResult } from '../types';
+import { RouteStop, RouteResult, RouteAlgorithmStep } from '../types';
+import {
+  geocodeAddress,
+  searchLocations,
+  reverseGeocodeAddress,
+} from './geocoding';
+
+export { geocodeAddress, searchLocations, reverseGeocodeAddress };
 
 /**
  * Service to handle intelligent multi-stop route planning.
- * Uses the free public OSRM server for road-aware routing.
+ * Road: OSRM (free public server)
+ * Sea: searoute-ts (Eurostat maritime network, Dijkstra)
+ * Air: Great-circle geodesic + Open-Meteo jet-stream optimization
  */
 
 interface RouteGeometry {
@@ -12,10 +21,55 @@ interface RouteGeometry {
 }
 
 /**
- * Fetches real road-aware routing between points using OSRM.
- * Falls back to Haversine if the API is unavailable.
+ * Fetches a single road leg between two points via OSRM.
  */
-export async function getRoadRoute(
+async function fetchRoadLeg(
+  from: [number, number],
+  to: [number, number],
+  goal: 'fastest' | 'eco' = 'fastest'
+): Promise<RouteGeometry> {
+  const coordsString = `${from[1]},${from[0]};${to[1]},${to[0]}`;
+  const base = `https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson&alternatives=false`;
+
+  const urls =
+    goal === 'eco'
+      ? [`${base}&exclude=motorway`, base]
+      : [base];
+
+  for (const url of urls) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) continue;
+      const data = await response.json();
+      if (data.code !== 'Ok' || !data.routes?.[0]?.geometry?.coordinates) continue;
+
+      const route = data.routes[0];
+      const coordinates = route.geometry.coordinates.map(
+        (c: number[]) => [c[1], c[0]] as [number, number]
+      );
+      if (coordinates.length < 2) continue;
+
+      return {
+        coordinates,
+        distance: route.distance / 1000,
+        duration: route.duration / 60,
+      };
+    } catch {
+      // try next URL variant
+    }
+  }
+
+  return {
+    coordinates: [from, to],
+    distance: getDistance(from, to),
+    duration: getDistance(from, to) * 1.5,
+  };
+}
+
+/**
+ * Builds full road geometry by routing each leg separately (most reliable for OSRM).
+ */
+async function buildRoadGeometryFromLegs(
   waypoints: [number, number][],
   goal: 'fastest' | 'eco' = 'fastest'
 ): Promise<RouteGeometry> {
@@ -23,251 +77,299 @@ export async function getRoadRoute(
     return { coordinates: waypoints, distance: 0, duration: 0 };
   }
 
-  // Calculate a midpoint detour in eco-mode to force OSRM to generate a completely distinct route
-  let queryWaypoints = [...waypoints];
-  if (goal === 'eco') {
-    const start = waypoints[0];
-    const end = waypoints[waypoints.length - 1];
-    
-    const midLat = (start[0] + end[0]) / 2;
-    const midLng = (start[1] + end[1]) / 2;
-    
-    // Perpendicular-like offset vector (approx 6-8 km offset)
-    const dLat = end[0] - start[0];
-    const dLng = end[1] - start[1];
-    
-    const offsetLat = midLat + (dLng >= 0 ? 0.07 : -0.07);
-    const offsetLng = midLng + (dLat >= 0 ? -0.07 : 0.07);
-    
-    const midIndex = Math.floor(waypoints.length / 2);
-    queryWaypoints.splice(midIndex, 0, [offsetLat, offsetLng]);
+  const allCoords: [number, number][] = [];
+  let totalDistance = 0;
+  let totalDuration = 0;
+
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    const leg = await fetchRoadLeg(waypoints[i], waypoints[i + 1], goal);
+    const coords = [...leg.coordinates];
+    if (i > 0 && coords.length > 0) coords.shift();
+    allCoords.push(...coords);
+    totalDistance += leg.distance;
+    totalDuration += leg.duration;
   }
 
-  const coordsString = queryWaypoints.map(w => `${w[1]},${w[0]}`).join(';');
-  const url = `https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson&alternatives=true`;
+  return {
+    coordinates: allCoords.length >= 2 ? allCoords : waypoints,
+    distance: totalDistance,
+    duration: totalDuration,
+  };
+}
+
+/**
+ * Fetches real road-aware routing between ordered waypoints using OSRM.
+ */
+export async function getRoadRoute(
+  waypoints: [number, number][],
+  goal: 'fastest' | 'eco' = 'fastest'
+): Promise<RouteGeometry> {
+  return buildRoadGeometryFromLegs(waypoints, goal);
+}
+
+/**
+ * OSRM Trip API — optimizes stop order + returns road geometry (real TSP on road network).
+ */
+async function getOptimizedRoadTrip(
+  waypoints: [number, number][],
+  goal: 'fastest' | 'eco' = 'fastest'
+): Promise<{
+  coordinates: [number, number][];
+  distance: number;
+  duration: number;
+  orderedIndices: number[];
+}> {
+  if (waypoints.length < 2) {
+    return { coordinates: waypoints, distance: 0, duration: 0, orderedIndices: [0] };
+  }
+
+  const coordsString = waypoints.map((w) => `${w[1]},${w[0]}`).join(';');
+  // Never pass exclude=motorway on multi-waypoint trip — OSRM returns InvalidValue for long India routes
+  const url = `https://router.project-osrm.org/trip/v1/driving/${coordsString}?roundtrip=false&source=first&destination=last&overview=full&geometries=geojson`;
 
   try {
     const response = await fetch(url);
-    if (!response.ok) throw new Error('OSRM API Error');
-    
-    const data = await response.json();
-    if (data.code !== 'Ok' || !data.routes?.[0]) throw new Error('No route found');
+    if (!response.ok) throw new Error('OSRM Trip API Error');
 
-    const route = data.routes[0];
+    const data = await response.json();
+    if (data.code !== 'Ok' || !data.trips?.[0]) throw new Error(data.message || 'No trip found');
+
+    const trip = data.trips[0];
+    const orderedIndices = (data.waypoints || [])
+      .map((wp: { waypoint_index: number }, inputIdx: number) => ({
+        inputIdx,
+        tripPos: wp.waypoint_index,
+      }))
+      .sort((a: { tripPos: number }, b: { tripPos: number }) => a.tripPos - b.tripPos)
+      .map((x: { inputIdx: number }) => x.inputIdx);
+
     return {
-      coordinates: route.geometry.coordinates.map((c: any) => [c[1], c[0]]),
-      distance: route.distance / 1000, // km
-      duration: route.duration / 60     // minutes
+      coordinates: trip.geometry.coordinates.map((c: number[]) => [c[1], c[0]] as [number, number]),
+      distance: trip.distance / 1000,
+      duration: trip.duration / 60,
+      orderedIndices,
     };
   } catch (error) {
-    // If the eco detour request failed, gracefully fall back to the standard route calculation
-    if (goal === 'eco') {
-      console.warn('Eco detour route search failed, falling back to standard fastest route.');
-      return getRoadRoute(waypoints, 'fastest');
-    }
-    console.warn('Routing API failed, falling back to local calculation:', error);
-    return {
-      coordinates: waypoints,
-      distance: calculateTotalDistance(waypoints),
-      duration: calculateTotalDistance(waypoints) * 1.5 // Rough estimate
-    };
+    throw error;
   }
 }
 
 /**
- * Intelligent Multi-Stop Optimizer
- * Uses a Nearest Neighbor algorithm to sequence stops efficiently.
+ * Ensure every stop has lat/lng via free geocoding APIs.
+ */
+export async function resolveStopCoordinates(stops: RouteStop[]): Promise<RouteStop[]> {
+  return Promise.all(
+    stops.map(async (stop, idx) => {
+      if (
+        typeof stop.lat === 'number' &&
+        typeof stop.lng === 'number' &&
+        !isNaN(stop.lat) &&
+        !isNaN(stop.lng)
+      ) {
+        return { ...stop };
+      }
+
+      const query = [stop.address, stop.city].filter(Boolean).join(', ');
+      if (!query.trim()) {
+        throw new Error(`Stop ${idx + 1} has no location — search and select a place from suggestions.`);
+      }
+
+      const coord = await geocodeAddress(query);
+      if (!coord) {
+        throw new Error(`Could not find location: "${query}". Try a more specific search.`);
+      }
+
+      return { ...stop, lat: coord.lat, lng: coord.lng };
+    })
+  );
+}
+
+const labelFor = (stop: RouteStop) =>
+  stop.address ? `${stop.address} (${stop.city || ''})`.replace(/\s*\(\s*\)/, '') : stop.city || 'Unknown';
+
+/**
+ * Intelligent Multi-Stop Road Optimizer
+ * Uses OSRM Trip API for stop sequencing on the real road network.
  */
 export const optimizeRoute = async (
   origin: string,
   stops: RouteStop[],
   goal: 'fastest' | 'eco' = 'fastest'
 ): Promise<RouteResult> => {
-  console.log('🛣️ Optimizing route for', stops.length, 'stops. Origin:', origin);
-  
+  console.log('🛣️ Optimizing road route for', stops.length, 'stops');
+
   if (stops.length === 0) {
     throw new Error('No stops provided for optimization');
   }
 
-  // 1. Ensure all stops have valid coordinates
-  const stopsWithCoords = await Promise.all(
-    stops.map(async (s, idx) => {
-      // If stop already has precise coordinates from autocomplete, use them
-      if (typeof s.lat === 'number' && typeof s.lng === 'number' && !isNaN(s.lat) && !isNaN(s.lng)) {
-        return { ...s };
-      }
-      
-      console.log(`🔍 Geocoding stop ${idx + 1}: ${s.address || s.city}`);
-      // Otherwise, fallback to geocoding the address or city
-      const query = s.address ? `${s.address}, ${s.city}` : s.city;
-      const coord = await geocodeAddress(query);
-      
-      if (coord) {
-        return { ...s, lat: coord.lat, lng: coord.lng };
-      }
-      
-      // Last resort: use mock coordinates for known cities or Mumbai as default
-      const cityCoord = await geocodeCity(s.city);
-      return { ...s, lat: cityCoord[0], lng: cityCoord[1] };
-    })
-  );
+  const stopsWithCoords = await resolveStopCoordinates(stops);
+  const algorithmTrace: RouteAlgorithmStep[] = [];
 
-  // 2. Determine the starting point
-  let currentCoord: [number, number];
-  let remainingStops: RouteStop[] = [...stopsWithCoords];
-  let sequence: RouteStop[] = [];
-
-  if (origin === "Start" && remainingStops.length > 0) {
-    // Use the first stop as the starting point
-    const firstStop = remainingStops.shift()!;
-    sequence.push(firstStop);
-    currentCoord = [firstStop.lat!, firstStop.lng!];
-  } else {
-    // Geocode the provided origin string
-    const originLoc = await geocodeCity(origin);
-    currentCoord = originLoc;
+  if (stopsWithCoords.length === 1) {
+    const s = stopsWithCoords[0];
+    const hubSequence = [labelFor(s)];
+    return {
+      stops: stopsWithCoords,
+      totalDistanceKm: 0,
+      totalDurationMins: 0,
+      overviewPolyline: JSON.stringify([[s.lat!, s.lng!]]),
+      hubSequence,
+      sequenceAlgorithm: 'Single stop — no route leg',
+      routingEngine: 'OSRM',
+      algorithmTrace: [],
+      geometryPointCount: 1,
+      usedRoadNetwork: false,
+    };
   }
 
-  // 3. Sequence optimization (Nearest Neighbor)
-  while (remainingStops.length > 0) {
-    let closestIndex = 0; // Default to first available if all else fails
-    let minDistance = Infinity;
+  const waypoints = stopsWithCoords.map((s) => [s.lat!, s.lng!] as [number, number]);
 
-    for (let i = 0; i < remainingStops.length; i++) {
-      const stop = remainingStops[i];
-      const dist = getDistance(currentCoord, [stop.lat!, stop.lng!]);
-      
-      if (dist < minDistance) {
-        minDistance = dist;
-        closestIndex = i;
-      }
-    }
+  let sequence = stopsWithCoords;
+  let orderedWaypoints = waypoints;
 
-    const nextStop = remainingStops.splice(closestIndex, 1)[0];
-    sequence.push(nextStop);
-    currentCoord = [nextStop.lat!, nextStop.lng!];
-  }
-
-  console.log('✅ Final sequence built with', sequence.length, 'stops');
-
-  // 4. Get the actual road geometry for the full sequence
-  const waypoints = sequence.map(s => [s.lat!, s.lng!] as [number, number]);
-  
   try {
-    const roadData = await getRoadRoute(waypoints, goal);
-    return {
-      stops: sequence,
-      totalDistanceKm: roadData.distance,
-      totalDurationMins: Math.round(roadData.duration),
-      overviewPolyline: JSON.stringify(roadData.coordinates)
-    };
+    const trip = await getOptimizedRoadTrip(waypoints, goal);
+    orderedWaypoints = trip.orderedIndices.map((i) => waypoints[i]);
+    sequence = trip.orderedIndices.map((i) => stopsWithCoords[i]);
   } catch (error) {
-    console.warn('⚠️ OSRM routing failed, using direct lines fallback');
-    return {
-      stops: sequence,
-      totalDistanceKm: calculateTotalDistance(waypoints),
-      totalDurationMins: Math.round(calculateTotalDistance(waypoints) * 1.5),
-      overviewPolyline: JSON.stringify(waypoints)
-    };
+    console.warn('OSRM Trip ordering failed, using input order:', error);
   }
+
+  // Always build geometry leg-by-leg — reliable full road paths on the map
+  const roadData = await buildRoadGeometryFromLegs(orderedWaypoints, goal);
+  const hubSequence = sequence.map((s) => labelFor(s));
+  const usedRoadNetwork = roadData.coordinates.length > orderedWaypoints.length * 3;
+
+  for (let i = 0; i < sequence.length - 1; i++) {
+    algorithmTrace.push({
+      step: i + 1,
+      from: labelFor(sequence[i]),
+      to: labelFor(sequence[i + 1]),
+      distanceKm: Math.round(
+        getDistance(
+          [sequence[i].lat!, sequence[i].lng!],
+          [sequence[i + 1].lat!, sequence[i + 1].lng!]
+        ) * 10
+      ) / 10,
+      reason: 'OSRM road leg (snapped to highway network)',
+    });
+  }
+
+  algorithmTrace.push({
+    step: algorithmTrace.length + 1,
+    from: hubSequence[0],
+    to: hubSequence[hubSequence.length - 1],
+    distanceKm: Math.round(roadData.distance * 10) / 10,
+    reason: `Full road geometry — ${roadData.coordinates.length} OSRM points`,
+  });
+
+  return {
+    stops: sequence,
+    totalDistanceKm: Math.round(roadData.distance * 10) / 10,
+    totalDurationMins: Math.round(roadData.duration),
+    overviewPolyline: JSON.stringify(roadData.coordinates),
+    hubSequence,
+    sequenceAlgorithm: 'OSRM Trip Optimizer + per-leg road geometry',
+    routingEngine: usedRoadNetwork
+      ? 'OSRM (Open Source Routing Machine)'
+      : 'Partial OSRM — some legs unavailable',
+    algorithmTrace,
+    geometryPointCount: roadData.coordinates.length,
+    usedRoadNetwork,
+  };
 };
 
-export const geocodeAddress = async (address: string): Promise<{lat: number, lng: number} | null> => {
-  try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data?.[0]) {
-      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-    }
-  } catch (e) {
-    console.error('Geocoding failed for:', address);
-  }
-  return null;
-}
-
-export const searchLocations = async (query: string, global: boolean = false): Promise<any[]> => {
-  if (!query || query.length < 3) return [];
-  try {
-    const countryFilter = global ? '' : '&countrycodes=in';
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=5${countryFilter}`;
-    const res = await fetch(url, {
-      headers: {
-        'Accept-Language': 'en'
-      }
-    });
-    const data = await res.json();
-    return data.map((item: any) => ({
-      display_name: item.display_name,
-      lat: parseFloat(item.lat),
-      lng: parseFloat(item.lon),
-      address: item.address
-    }));
-  } catch (e) {
-    console.error('Location search failed:', e);
-    return [];
-  }
-}
-
 /**
- * Aviation Routing Engine
- * Generates a Great Circle (Geodesic) path between waypoints for global flight routing.
+ * Aviation Routing — Great-circle geodesic paths with live jet-stream optimization.
  */
 export const optimizeAirRoute = async (
   stops: RouteStop[],
   mode: 'fastest' | 'eco' = 'eco'
 ): Promise<RouteResult> => {
-  console.log('✈️ Optimizing flight path for', stops.length, 'waypoints in mode:', mode);
-  
+  console.log('✈️ Optimizing flight path for', stops.length, 'waypoints, mode:', mode);
+
   if (stops.length < 2) {
     throw new Error('At least 2 points are required for a flight path');
   }
 
-  // 1. Calculate Great Circle segments
-  const waypoints = stops.map(s => [s.lat!, s.lng!] as [number, number]);
-  const totalDist = calculateTotalDistance(waypoints);
-  
-  // 2. Generate a curved path (geodesic approximation) for the map
+  const resolved = await resolveStopCoordinates(stops);
+  const waypoints = resolved.map((s) => [s.lat!, s.lng!] as [number, number]);
+  const algorithmTrace: RouteAlgorithmStep[] = [];
   const curvedGeometry: [number, number][] = [];
-  
+  let totalDist = 0;
+
   for (let i = 0; i < waypoints.length - 1; i++) {
     const start = waypoints[i];
-    const end = waypoints[i+1];
-    
+    const end = waypoints[i + 1];
+    const legDist = getDistance(start, end);
+    totalDist += legDist;
+
+    let legPath: [number, number][];
+
     if (mode === 'eco') {
-      // Calculate a wind-optimized detour point to bend the arc
+      // Wind-optimized: sample jet stream and bend the great circle toward favorable winds
       const midLat = (start[0] + end[0]) / 2;
       const midLng = (start[1] + end[1]) / 2;
-      
-      const dLat = end[0] - start[0];
-      const dLng = end[1] - start[1];
-      
-      // Apply a perpendicular offset (approx 3.5 degrees) to force a distinct visual flight path
-      const offsetLat = midLat + (dLng >= 0 ? 3.5 : -3.5);
-      const offsetLng = midLng + (dLat >= 0 ? -3.5 : 3.5);
-      
-      const detour: [number, number] = [offsetLat, offsetLng];
-      
-      // Interpolate two geodesic sub-arcs
-      for (let j = 0; j <= 25; j++) {
-        curvedGeometry.push(interpolateGreatCircle(start, detour, j / 25));
-      }
-      for (let j = 1; j <= 25; j++) {
-        curvedGeometry.push(interpolateGreatCircle(detour, end, j / 25));
-      }
+      const wind = await getJetStreamData(midLat, midLng);
+      const bearing = calculateBearing(start, end);
+
+      // Perpendicular offset weighted by wind strength (max ~4° shift)
+      const windRad = (wind.direction * Math.PI) / 180;
+      const perpBearing = bearing + 90;
+      const perpRad = (perpBearing * Math.PI) / 180;
+      const windAlign = Math.cos(windRad - perpRad);
+      const offsetDeg = Math.min(wind.speed / 40, 4) * windAlign;
+
+      const detour: [number, number] = [
+        midLat + offsetDeg * Math.cos(perpRad),
+        midLng + offsetDeg * Math.sin(perpRad) / Math.cos((midLat * Math.PI) / 180),
+      ];
+
+      legPath = [];
+      for (let j = 0; j <= 30; j++) legPath.push(interpolateGreatCircle(start, detour, j / 30));
+      for (let j = 1; j <= 30; j++) legPath.push(interpolateGreatCircle(detour, end, j / 30));
+
+      algorithmTrace.push({
+        step: i + 1,
+        from: labelFor(resolved[i]),
+        to: labelFor(resolved[i + 1]),
+        distanceKm: Math.round(legDist * 10) / 10,
+        reason: `Jet-stream optimized arc (wind ${wind.speed} km/h from ${wind.direction}°)`,
+      });
     } else {
-      // Direct Great Circle path
-      for (let j = 0; j <= 50; j++) {
-        curvedGeometry.push(interpolateGreatCircle(start, end, j / 50));
+      legPath = [];
+      for (let j = 0; j <= 60; j++) {
+        legPath.push(interpolateGreatCircle(start, end, j / 60));
       }
+      algorithmTrace.push({
+        step: i + 1,
+        from: labelFor(resolved[i]),
+        to: labelFor(resolved[i + 1]),
+        distanceKm: Math.round(legDist * 10) / 10,
+        reason: 'Great-circle geodesic (shortest air distance)',
+      });
     }
+
+    if (i > 0 && curvedGeometry.length > 0) legPath.shift();
+    curvedGeometry.push(...legPath);
   }
 
+  const hubSequence = resolved.map((s) => labelFor(s));
+
   return {
-    stops: stops,
-    totalDistanceKm: totalDist,
+    stops: resolved,
+    totalDistanceKm: Math.round(totalDist * 10) / 10,
     totalDurationMins: Math.round((totalDist / 850) * 60),
-    overviewPolyline: JSON.stringify(curvedGeometry)
+    overviewPolyline: JSON.stringify(curvedGeometry),
+    hubSequence,
+    sequenceAlgorithm:
+      mode === 'eco'
+        ? 'Great-Circle + Jet-Stream Optimization (Open-Meteo)'
+        : 'Great-Circle Geodesic',
+    routingEngine: 'WGS84 Geodesic + Open-Meteo 250hPa winds',
+    algorithmTrace,
+    geometryPointCount: curvedGeometry.length,
+    usedRoadNetwork: true,
   };
 };
 
@@ -355,208 +457,108 @@ export const getSeaConditions = async (lat: number, lng: number): Promise<{ wave
 }
 
 /**
- * Maritime Engine V3: High-Precision Global Grid + Spline Geometry
+ * Maritime Routing — searoute-ts (Eurostat 2025 maritime network, Dijkstra shortest path).
  */
-
-// Ultra-Dense Global Maritime Network
-const MARITIME_NODES: Record<string, [number, number]> = {
-  // India - Comprehensive Coastal Network
-  'Mundra': [22.7, 69.7], 'Kandla': [23.0, 70.2], 'Mumbai': [18.8, 72.5], 'Mormugao': [15.4, 73.8],
-  'Mangalore': [12.9, 74.8], 'Kochi': [9.9, 76.2], 'Cape_Comorin': [8.0, 77.5], 'Tuticorin': [8.7, 78.2],
-  'Chennai': [13.1, 80.3], 'Ennore': [13.3, 80.3], 'Krishnapatnam': [14.2, 80.1], 'Visakhapatnam': [17.7, 83.3],
-  'Paradip': [20.3, 86.7], 'Haldia': [22.0, 88.1], 'Kolkata': [22.5, 88.3],
-  
-  // Asia & Indian Ocean Hubs
-  'Colombo': [6.9, 79.8], 'Sri_Lanka_E': [7.0, 82.0], 'Sri_Lanka_W': [7.0, 79.0], 'Sri_Lanka_S': [5.8, 80.5],
-  'Malacca_N': [5.5, 95.5], 'Malacca_S': [1.3, 103.5], 'Malacca_Exit': [6.0, 94.0], 'Singapore': [1.2, 103.8], 
-  'Port_Kelang': [3.0, 101.4],
-  'Sunda': [-6.0, 105.5], 'Shanghai': [31.2, 122.5], 'Hong_Kong': [22.2, 114.2], 'Tokyo': [35.5, 140.0],
-  'Busan': [35.1, 129.1], 'Dubai_Jebel_Ali': [25.0, 55.0], 'Aden': [12.8, 45.0], 
-  'Ningbo': [29.8, 122.1], 'Shenzhen': [22.5, 113.9], 'Guangzhou': [22.7, 113.6], 'Qingdao': [36.0, 120.2], 'Tianjin': [38.9, 117.8],
-  'Kaohsiung': [22.6, 120.3], 'Arabian_Sea_Buffer': [15.0, 60.0], 'Gulf_of_Oman': [24.0, 59.0],
-  'Strait_of_Hormuz': [26.5, 56.5], 'Socotra_Pass': [13.0, 54.0],
-  // SE Asia & Oceania
-  'Tanjung_Pelepas': [1.4, 103.5], 'Laem_Chabang': [13.1, 100.9], 'Ho_Chi_Minh': [10.7, 106.7],
-  'Sydney': [-33.9, 151.2], 'Melbourne': [-37.8, 144.9], 'Brisbane': [-27.4, 153.2],
-  // Europe & Med
-  'Valencia': [39.4, -0.3], 'Algeciras': [36.1, -5.4], 'Antwerp': [51.2, 4.4], 'Felixstowe': [51.9, 1.3], 'Le_Havre': [49.5, 0.1],
-  // Americas
-  'Savannah': [32.1, -81.1], 'Houston': [29.7, -95.0], 'Vancouver': [49.3, -123.1], 'Santos': [-23.9, -46.3], 'Buenos_Aires': [-34.6, -58.4],
-  'Suez_S': [29.9, 32.5], 'Suez_N': [31.3, 32.3], 'Port_Said': [31.2, 32.3], 'Malta': [35.9, 14.4],
-  'Med_Central': [34.5, 23.0], 'Med_East': [32.5, 30.0],
-  'Gibraltar': [35.9, -5.6], 'English_Channel': [50.5, 0.0], 'Rotterdam': [52.1, 3.5], 'Hamburg': [54.0, 9.0],
-  'Biscay': [45.0, -5.0], 'Azores': [38.0, -28.0],
-  // Americas
-  'NYC': [40.5, -73.8], 'Miami': [25.8, -80.0], 'Panama_At': [9.3, -79.9], 'Panama_Pa': [8.9, -79.6],
-  'LA': [33.7, -118.4], 'SF': [37.8, -122.5], 'Seattle': [48.5, -125.0], 'Cape_Horn': [-56.0, -67.0],
-  // Africa
-  'Cape_Town': [-34.4, 18.5], 'Durban': [-29.9, 31.0], 'Lagos': [6.4, 3.4], 'Dakar': [14.7, -17.5],
-  'Bab_el_Mandeb': [12.6, 43.3], 'Red_Sea_Central': [20.0, 38.5], 'Red_Sea_North': [25.0, 35.5]
-};
-
-const MARITIME_EDGES: [string, string][] = [
-  // Indian Coastal Chain
-  ['Mundra', 'Kandla'], ['Kandla', 'Mumbai'], ['Mumbai', 'Mormugao'], ['Mormugao', 'Mangalore'],
-  ['Mangalore', 'Kochi'], ['Kochi', 'Cape_Comorin'], ['Cape_Comorin', 'Tuticorin'],
-  ['Tuticorin', 'Chennai'], ['Chennai', 'Ennore'], ['Ennore', 'Krishnapatnam'], 
-  ['Krishnapatnam', 'Visakhapatnam'], ['Visakhapatnam', 'Paradip'],
-  ['Paradip', 'Haldia'], ['Haldia', 'Kolkata'],
-  
-  // Asia Hub Connectors
-  ['Mumbai', 'Dubai_Jebel_Ali'], ['Kochi', 'Colombo'], ['Cape_Comorin', 'Sri_Lanka_S'],
-  ['Sri_Lanka_S', 'Colombo'], ['Sri_Lanka_S', 'Sri_Lanka_E'], ['Sri_Lanka_E', 'Malacca_N'],
-  ['Malacca_N', 'Malacca_S'], ['Malacca_S', 'Port_Kelang'], ['Port_Kelang', 'Singapore'],
-  ['Singapore', 'Tanjung_Pelepas'], ['Tanjung_Pelepas', 'Ho_Chi_Minh'],
-  ['Ho_Chi_Minh', 'Laem_Chabang'], ['Laem_Chabang', 'Shenzhen'], ['Shenzhen', 'Hong_Kong'],
-  ['Hong_Kong', 'Guangzhou'], ['Guangzhou', 'Kaohsiung'], ['Kaohsiung', 'Ningbo'],
-  ['Ningbo', 'Shanghai'], ['Shanghai', 'Qingdao'], ['Qingdao', 'Tianjin'],
-  ['Tianjin', 'Busan'], ['Busan', 'Tokyo'],
-
-  // Indian Ocean Deep-Water Links
-  ['Singapore', 'Tanjung_Pelepas'], ['Tanjung_Pelepas', 'Port_Kelang'], ['Port_Kelang', 'Malacca_S'], 
-  ['Malacca_S', 'Malacca_N'], ['Malacca_N', 'Malacca_Exit'], ['Malacca_Exit', 'Socotra_Pass'],
-  ['Colombo', 'Socotra_Pass'], ['Sri_Lanka_S', 'Socotra_Pass'],
-
-  // Trans-Oceanic & Regional Connectors
-  ['Singapore', 'Sydney'], ['Sydney', 'Melbourne'], ['Melbourne', 'Brisbane'], ['Brisbane', 'Singapore'],
-  ['Dubai_Jebel_Ali', 'Strait_of_Hormuz'], ['Strait_of_Hormuz', 'Gulf_of_Oman'], ['Gulf_of_Oman', 'Arabian_Sea_Buffer'],
-  ['Arabian_Sea_Buffer', 'Socotra_Pass'], ['Socotra_Pass', 'Aden'],
-  ['Aden', 'Bab_el_Mandeb'], 
-  ['Bab_el_Mandeb', 'Red_Sea_Central'], ['Red_Sea_Central', 'Red_Sea_North'], ['Red_Sea_North', 'Suez_S'],
-  ['Suez_S', 'Suez_N'], ['Suez_N', 'Med_East'], ['Med_East', 'Med_Central'], ['Med_Central', 'Malta'],
-  ['Malta', 'Gibraltar'], ['Gibraltar', 'Algeciras'],
-  ['Algeciras', 'Valencia'],
-  ['Gibraltar', 'Biscay'], ['Biscay', 'English_Channel'], ['English_Channel', 'Rotterdam'],
-  ['Rotterdam', 'Antwerp'], ['Antwerp', 'Felixstowe'], ['Felixstowe', 'Le_Havre'],
-  ['Rotterdam', 'Hamburg'], ['Gibraltar', 'Azores'], ['Azores', 'NYC'],
-  ['NYC', 'Savannah'], ['Savannah', 'Miami'], ['Miami', 'Houston'], ['Houston', 'Panama_At'],
-  ['Panama_At', 'Panama_Pa'], ['Panama_Pa', 'LA'], ['LA', 'SF'], ['SF', 'Seattle'],
-  ['Seattle', 'Vancouver'], ['Vancouver', 'Ningbo'], ['Tokyo', 'LA'],
-  ['Panama_Pa', 'Santos'], ['Santos', 'Buenos_Aires'], ['Buenos_Aires', 'Cape_Horn'],
-  ['Cape_Horn', 'Cape_Town'], ['Cape_Town', 'Durban'], ['Durban', 'Sri_Lanka_S'],
-  ['Gibraltar', 'Dakar'], ['Dakar', 'Lagos'], ['Lagos', 'Cape_Town'],
-  ['Mumbai', 'Colombo'], ['Kochi', 'Sri_Lanka_S'], ['Chennai', 'Sri_Lanka_E'], 
-  ['Gibraltar', 'Rotterdam'], ['Algeciras', 'Rotterdam'], ['Valencia', 'Gibraltar'],
-  ['Sydney', 'Panama_Pa']
-];
-
-// Catmull-Rom Spline for smooth ocean paths
-function interpolateSpline(p0: [number, number], p1: [number, number], p2: [number, number], p3: [number, number], t: number): [number, number] {
-  const t2 = t * t;
-  const t3 = t2 * t;
-  
-  const f1 = -0.5 * t3 + t2 - 0.5 * t;
-  const f2 = 1.5 * t3 - 2.5 * t2 + 1.0;
-  const f3 = -1.5 * t3 + 2.0 * t2 + 0.5 * t;
-  const f4 = 0.5 * t3 - 0.5 * t2;
-  
-  return [
-    p0[0] * f1 + p1[0] * f2 + p2[0] * f3 + p3[0] * f4,
-    p0[1] * f1 + p1[1] * f2 + p2[1] * f3 + p3[1] * f4
-  ];
-}
-
 export const optimizeSeaRoute = async (
   stops: RouteStop[],
   mode: 'express' | 'eco' | 'heavy' = 'eco'
 ): Promise<RouteResult> => {
-  console.log('🚢 Initializing Maritime V3 Engine (Nautical Spline Logic). Mode:', mode);
-  
-  const startCoord: [number, number] = [stops[0].lat!, stops[0].lng!];
-  const endCoord: [number, number] = [stops[stops.length-1].lat!, stops[stops.length-1].lng!];
+  console.log('🚢 Maritime routing via searoute-ts Eurostat network. Mode:', mode);
 
-  // Configure blocked nodes for different maritime optimization goals to force distinct sea paths
-  const blockedNodes = new Set<string>();
-  
-  // Only block nodes if we are not starting or ending directly at one of them
-  const nodes = Object.keys(MARITIME_NODES);
-  let startHub = nodes.reduce((a, b) => getDistance(startCoord, MARITIME_NODES[a]) < getDistance(startCoord, MARITIME_NODES[b]) ? a : b);
-  let endHub = nodes.reduce((a, b) => getDistance(endCoord, MARITIME_NODES[a]) < getDistance(endCoord, MARITIME_NODES[b]) ? a : b);
+  // Lazy-load maritime engine so road planner doesn't bundle searoute-ts
+  const { seaRoute, seaRouteMulti } = await import('searoute-ts');
 
+  const resolved = await resolveStopCoordinates(stops);
+  const algorithmTrace: RouteAlgorithmStep[] = [];
+
+  const speedKnots = mode === 'express' ? 24 : mode === 'heavy' ? 16 : 20;
+  const restrictions: Array<'suez' | 'babelmandeb'> = [];
   if (mode === 'heavy') {
-    if (startHub !== 'Suez_S' && startHub !== 'Suez_N' && endHub !== 'Suez_S' && endHub !== 'Suez_N') {
-      // Heavy vessels bypass the Suez Canal entirely to route around Africa (Cape of Good Hope)
-      blockedNodes.add('Suez_S');
-      blockedNodes.add('Suez_N');
-      blockedNodes.add('Bab_el_Mandeb');
-      blockedNodes.add('Red_Sea_Central');
-      blockedNodes.add('Red_Sea_North');
-    }
-  } else if (mode === 'eco') {
-    if (startHub !== 'Socotra_Pass' && endHub !== 'Socotra_Pass') {
-      // Eco vessels avoid standard direct corridors, routing through other maritime nodes
-      blockedNodes.add('Socotra_Pass');
-    }
+    restrictions.push('suez', 'babelmandeb');
   }
 
-  console.log(`🔍 Routing from Hub: ${startHub} to Hub: ${endHub}`);
+  const points = resolved.map((s) => [s.lng!, s.lat!] as [number, number]);
 
-  const dists: Record<string, number> = {};
-  const prev: Record<string, string | null> = {};
-  
-  nodes.forEach(n => { dists[n] = n === startHub ? 0 : Infinity; prev[n] = null; });
-  const q = new Set(nodes);
+  const options = {
+    units: 'kilometers' as const,
+    speedKnots,
+    returnPassages: true,
+    appendOriginDestination: true,
+    antimeridian: 'unwrap' as const,
+    restrictions: restrictions.length > 0 ? restrictions : undefined,
+    vesselDraftMeters: mode === 'heavy' ? 16 : undefined,
+  };
 
-  while (q.size > 0) {
-    let u = Array.from(q).reduce((a, b) => dists[a] < dists[b] ? a : b);
-    if (dists[u] === Infinity || u === endHub) break;
-    q.delete(u);
-    MARITIME_EDGES.filter(e => e.includes(u)).map(e => e[0] === u ? e[1] : e[0]).forEach(v => {
-      // Skip connection if either node is blocked for this routing mode
-      if (blockedNodes.has(u) || blockedNodes.has(v)) return;
-      
-      let alt = dists[u] + getDistance(MARITIME_NODES[u], MARITIME_NODES[v]);
-      if (alt < dists[v]) { dists[v] = alt; prev[v] = u; }
+  let routeFeature;
+  try {
+    routeFeature =
+      points.length > 2
+        ? seaRouteMulti(points, options)
+        : seaRoute(points[0], points[points.length - 1], options);
+  } catch (err) {
+    console.warn('Sea route with restrictions failed, retrying unrestricted:', err);
+    routeFeature = seaRoute(points[0], points[points.length - 1], {
+      ...options,
+      restrictions: undefined,
     });
   }
 
-  let hubSequence: string[] = [];
-  let curr: string | null = endHub;
-  while (curr) { hubSequence.unshift(curr); curr = prev[curr]; }
-  
-  // If no path was found due to blocked nodes, fallback to standard express route
-  if ((hubSequence.length < 2 || dists[endHub] === Infinity) && blockedNodes.size > 0) {
-    console.warn('⚠️ Maritime routing blocked nodes caused disconnection. Retrying with full seaway graph.');
-    return optimizeSeaRoute(stops, 'express');
+  const seaCoords: [number, number][] = routeFeature.geometry.coordinates.map(
+    (c) => [c[1], c[0]] as [number, number]
+  );
+
+  const passages = routeFeature.properties.passages || [];
+  const hubSequence = [
+    ...passages.map((p: string) => p.replace(/_/g, ' ').toUpperCase()),
+    labelFor(resolved[resolved.length - 1]),
+  ];
+
+  for (let i = 0; i < resolved.length - 1; i++) {
+    const dist = getDistance(
+      [resolved[i].lat!, resolved[i].lng!],
+      [resolved[i + 1].lat!, resolved[i + 1].lng!]
+    );
+    algorithmTrace.push({
+      step: i + 1,
+      from: labelFor(resolved[i]),
+      to: labelFor(resolved[i + 1]),
+      distanceKm: Math.round(dist * 10) / 10,
+      reason: `Maritime leg via Eurostat marnet (Dijkstra)`,
+    });
   }
 
-  console.log('🗺️ Path found:', hubSequence.join(' -> '));
-
-  const hubPath: [number, number][] = hubSequence
-    .filter(h => !!MARITIME_NODES[h])
-    .map(h => MARITIME_NODES[h]);
-  const path: [number, number][] = [startCoord, ...hubPath, endCoord];
-  
-  // Generate Smooth Spline Geometry for the Sea Leg
-  const seaGeometry: [number, number][] = [];
-  if (path.length >= 2) {
-    for (let i = 0; i < path.length - 1; i++) {
-      const p1 = path[i];
-      const p2 = path[i+1];
-      if (!p1 || !p2) continue;
-
-      const p0 = (i > 0) ? path[i-1] : p1;
-      const p3 = (i < path.length - 2) ? path[i+2] : p2;
-
-      for (let t = 0; t <= 1; t += 0.05) {
-        const pt = interpolateSpline(p0, p1, p2, p3, t);
-        if (pt && !isNaN(pt[0])) seaGeometry.push(pt);
-      }
-    }
+  if (passages.length > 0) {
+    algorithmTrace.push({
+      step: algorithmTrace.length + 1,
+      from: labelFor(resolved[0]),
+      to: labelFor(resolved[resolved.length - 1]),
+      distanceKm: Math.round(routeFeature.properties.length * 10) / 10,
+      reason: `Passages: ${passages.join(' → ')} | ${seaCoords.length} network points`,
+    });
   }
 
-  // Intermodal 'Last Mile' (Dashed path from Port to inland Destination)
-  const lastMile: [number, number][] = [MARITIME_NODES[endHub], endCoord];
+  const durationHours =
+    routeFeature.properties.durationHours ??
+    routeFeature.properties.length / (speedKnots * 1.852);
 
-  const totalDist = calculateTotalDistance([...path, endCoord]);
-  
+  // Last-mile dashed line from snapped port to exact destination coordinate
+  const lastStop = resolved[resolved.length - 1];
+  const snapEnd = seaCoords[seaCoords.length - 1];
+  const lastMile: [number, number][] = [snapEnd, [lastStop.lat!, lastStop.lng!]];
+  const snapDist = getDistance(snapEnd, [lastStop.lat!, lastStop.lng!]);
+
   return {
-    stops,
-    totalDistanceKm: totalDist,
-    totalDurationMins: Math.round((totalDist / 35) * 60),
-    overviewPolyline: JSON.stringify(seaGeometry),
-    intermodalPolyline: JSON.stringify(lastMile),
-    hubSequence: hubSequence
+    stops: resolved,
+    totalDistanceKm: Math.round((routeFeature.properties.length + snapDist) * 10) / 10,
+    totalDurationMins: Math.round(durationHours * 60),
+    overviewPolyline: JSON.stringify(seaCoords),
+    intermodalPolyline: snapDist > 1 ? JSON.stringify(lastMile) : undefined,
+    hubSequence,
+    sequenceAlgorithm: 'Dijkstra on Eurostat Maritime Network (searoute-ts)',
+    routingEngine: 'searoute-ts / Eurostat MARNET 2025',
+    algorithmTrace,
+    geometryPointCount: seaCoords.length,
+    usedRoadNetwork: true,
   };
 };
 
@@ -565,17 +567,7 @@ export const optimizeSeaRoute = async (
 async function geocodeCity(city: string): Promise<[number, number]> {
   const cached = await geocodeAddress(city);
   if (cached) return [cached.lat, cached.lng];
-
-  // Fallback coords for India major cities
-  const mockCoords: any = {
-    'Mumbai, Maharashtra': [19.0760, 72.8777],
-    'Pune, Maharashtra': [18.5204, 73.8567],
-    'Bangalore, Karnataka': [12.9716, 77.5946],
-    'Hyderabad, Telangana': [17.3850, 78.4867],
-    'Chennai, Tamil Nadu': [13.0827, 80.2707],
-    'Delhi, Delhi': [28.6139, 77.2090]
-  };
-  return mockCoords[city] || [19.0760, 72.8777];
+  throw new Error(`Could not geocode: ${city}`);
 }
 
 function getDistance(c1: [number, number], c2: [number, number]): number {

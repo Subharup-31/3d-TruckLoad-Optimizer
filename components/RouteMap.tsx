@@ -4,8 +4,9 @@ import { MapPin, Navigation } from 'lucide-react';
 
 interface RouteMapProps {
   stops: RouteStop[];
-  geometry?: string; // Optional OSRM polyline JSON
-  intermodalGeometry?: string; // Optional Intermodal path (dashed)
+  geometry?: string;
+  intermodalGeometry?: string;
+  geometryPointCount?: number;
 }
 
 declare global {
@@ -14,8 +15,12 @@ declare global {
   }
 }
 
-export const RouteMap: React.FC<RouteMapProps> = ({ stops, geometry, intermodalGeometry }) => {
-  console.log('🗺️ RouteMap rendered with stops:', stops);
+export const RouteMap: React.FC<RouteMapProps> = ({
+  stops,
+  geometry,
+  intermodalGeometry,
+  geometryPointCount: geometryPointCountProp,
+}) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -90,6 +95,7 @@ export const RouteMap: React.FC<RouteMapProps> = ({ stops, geometry, intermodalG
   const updateMap = async () => {
     if (!mapInstanceRef.current || !window.L) return;
 
+    try {
     // Clear existing layers
     mapInstanceRef.current.eachLayer((layer: any) => {
       if (layer instanceof window.L.Marker || layer instanceof window.L.Polyline) {
@@ -106,7 +112,18 @@ export const RouteMap: React.FC<RouteMapProps> = ({ stops, geometry, intermodalG
     let roadPath: [number, number][] = [];
     if (geometry) {
       try {
-        roadPath = JSON.parse(geometry);
+        const parsed = JSON.parse(geometry) as [number, number][];
+        roadPath = parsed.filter(
+          (c) =>
+            Array.isArray(c) &&
+            c.length >= 2 &&
+            typeof c[0] === 'number' &&
+            typeof c[1] === 'number' &&
+            !isNaN(c[0]) &&
+            !isNaN(c[1]) &&
+            c[0] >= -90 &&
+            c[0] <= 90
+        );
       } catch (e) {
         console.error('Failed to parse route geometry');
       }
@@ -156,31 +173,32 @@ export const RouteMap: React.FC<RouteMapProps> = ({ stops, geometry, intermodalG
       }
     });
 
-    // 3. Draw route line - prioritize high-precision seaway geometry
-    if (roadPath.length > 1 || routeCoordinates.length > 1) {
-      const finalPath = roadPath.length > 1 ? roadPath : routeCoordinates;
+    // 3. Draw route line — must use OSRM geometry (thousands of points), not stop markers only
+    const hasRoadGeometry = roadPath.length > stops.length * 3;
+    const finalPath = hasRoadGeometry ? roadPath : routeCoordinates;
 
-      // Outer glow (wider, lighter pink)
+    if (finalPath.length > 1) {
       window.L.polyline(finalPath, {
         color: '#ff69b4',
         weight: 12,
         opacity: 0.3,
-        smoothFactor: 1,
+        smoothFactor: 0,
         lineJoin: 'round',
-        lineCap: 'round'
+        lineCap: 'round',
       }).addTo(mapInstanceRef.current);
 
-      // Main route line (pink/magenta)
       window.L.polyline(finalPath, {
         color: '#e91e63',
         weight: 6,
         opacity: 0.9,
-        smoothFactor: 1,
+        smoothFactor: 0,
         lineJoin: 'round',
-        lineCap: 'round'
+        lineCap: 'round',
       }).addTo(mapInstanceRef.current);
 
-      console.log(`✅ ${roadPath.length > 0 ? 'Road' : 'Direct'} route drawn on map`);
+      console.log(
+        `✅ ${hasRoadGeometry ? 'OSRM road' : 'Direct'} route drawn (${finalPath.length} points)`
+      );
     }
     
     // 4. Draw Intermodal 'Last Mile' (Dashed)
@@ -219,7 +237,22 @@ export const RouteMap: React.FC<RouteMapProps> = ({ stops, geometry, intermodalG
         maxZoom: 13
       });
     }
+    } catch (error) {
+      console.error('❌ Error updating map:', error);
+    }
   };
+
+  const legendPointCount =
+    geometryPointCountProp ??
+    (geometry && geometry.length < 100000
+      ? (() => {
+          try {
+            return JSON.parse(geometry).length;
+          } catch {
+            return 0;
+          }
+        })()
+      : 0);
 
   if (isLoading) {
     return (
@@ -252,7 +285,7 @@ export const RouteMap: React.FC<RouteMapProps> = ({ stops, geometry, intermodalG
         </div>
         <div className="flex items-center gap-2">
           <div className="h-1.5 w-10 bg-gradient-to-r from-pink-500 to-pink-600 rounded-full shadow"></div>
-          <span>Driving Route</span>
+          <span>{legendPointCount > stops.length * 3 ? 'OSRM Road Route' : 'Direct Route'}</span>
         </div>
       </div>
       

@@ -2,11 +2,15 @@ import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Text, Edges } from '@react-three/drei';
 import { StorageService } from '../services/storage';
-import { packTruck } from '../services/packer';
+import { packTruck, getLoadingSequence } from '../services/packer';
+import { useLoadPlaySequence } from '../hooks/useLoadPlaySequence';
+import { LoadPlaySequenceButton } from '../components/LoadPlaySequenceButton';
 import { runHybridOptimization } from '../services/hybridOptimizer';
 import { OpenRouterService } from '../services/openrouter';
+import { LoadAiInsightPanel } from '../components/LoadAiInsightPanel';
+import { CoGIndicator } from '../components/CoGIndicator';
 import { Truck, Item, PlacedItem, LoadResult, RouteStop } from '../types';
-import { Box, AlertCircle, RefreshCw, Camera, RotateCw, Play, Square, Loader2 } from 'lucide-react';
+import { Box, AlertCircle, RefreshCw, Camera, RotateCw, Loader2 } from 'lucide-react';
 import { TRUCK_OPTIONS } from '../constants';
 
 // -- 3D COMPONENTS --
@@ -327,10 +331,11 @@ export const Optimizer: React.FC = () => {
   const [focusedItemUuid, setFocusedItemUuid] = useState<string | null>(null);
   const [selectedUnplacedItem, setSelectedUnplacedItem] = useState<{item: Item, index: number} | null>(null);
   const [selectedPlacedItem, setSelectedPlacedItem] = useState<PlacedItem | null>(null);
-  // Play mode: step through items one by one
-  const [playMode, setPlayMode] = useState(false);
-  const [playIndex, setPlayIndex] = useState(0);
-  const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Play mode: step through items in loading order
+  const loadingSequence = result ? getLoadingSequence(result.placedItems) : [];
+  const { playMode, playIndex, visibleCount, toggle: togglePlay, stop: stopPlay } = useLoadPlaySequence(
+    loadingSequence.length
+  );
   // AI Stability description
   const [stabilityReport, setStabilityReport] = useState<string>('');
   const [stabilityLoading, setStabilityLoading] = useState(false);
@@ -391,8 +396,7 @@ export const Optimizer: React.FC = () => {
     
     setAnimateItems(true);
     setIsCalculating(false);
-    setPlayMode(false);
-    setPlayIndex(0);
+    stopPlay();
   };
 
   // Generate AI stability report when result changes
@@ -411,34 +415,11 @@ export const Optimizer: React.FC = () => {
       placedItems: result.placedItems.length,
       unplacedItems: result.unplacedItems.length,
       mode: 'truck'
-    }).then(text => {
-      setStabilityReport(text);
+    }).then(res => {
+      setStabilityReport(res.text);
       setStabilityLoading(false);
     }).catch(() => setStabilityLoading(false));
   }, [result]);
-
-  // Play mode: advance one item every 1.2 seconds
-  useEffect(() => {
-    if (playMode && result) {
-      if (playIndex >= result.placedItems.length) {
-        setPlayMode(false);
-        return;
-      }
-      playIntervalRef.current = setInterval(() => {
-        setPlayIndex(prev => {
-          if (prev + 1 >= (result?.placedItems.length ?? 0)) {
-            clearInterval(playIntervalRef.current!);
-            setPlayMode(false);
-            return result?.placedItems.length ?? prev;
-          }
-          return prev + 1;
-        });
-      }, 1200);
-    } else {
-      if (playIntervalRef.current) clearInterval(playIntervalRef.current);
-    }
-    return () => { if (playIntervalRef.current) clearInterval(playIntervalRef.current); };
-  }, [playMode]);
 
   // Camera positions for different views
   const getCameraPosition = (): [number, number, number] => {
@@ -691,7 +672,20 @@ export const Optimizer: React.FC = () => {
                               )}
                             </div>
 
-                            <button 
+                            {/* AI Load Insight */}
+                            {selectedTruck && (
+                              <LoadAiInsightPanel
+                                mode="truck"
+                                vehicle={selectedTruck}
+                                loadResult={result}
+                                showStability={false}
+                                compact
+                                className="mt-3 !p-3 !bg-violet-50 dark:!bg-violet-950/20 !border-violet-200 dark:!border-violet-800"
+                              />
+                            )}
+
+                            <button
+                                type="button"
                                 onClick={() => setFocusCoG(!focusCoG)}
                                 className={`w-full mt-3 py-2 rounded-lg text-[10px] font-bold uppercase transition flex items-center justify-center gap-2 ${
                                     focusCoG 
@@ -848,25 +842,12 @@ export const Optimizer: React.FC = () => {
             <RotateCw className="w-4 h-4 inline mr-1" /> Auto-Rotate
           </button>
           {result && (
-            <button
-              onClick={() => {
-                if (playMode) {
-                  setPlayMode(false);
-                } else {
-                  setPlayIndex(0);
-                  setPlayMode(true);
-                }
-              }}
-              className={`px-3 py-2 rounded text-xs font-semibold transition flex items-center gap-1.5 ${
-                playMode
-                  ? 'bg-orange-500 text-white animate-pulse'
-                  : 'bg-white/90 dark:bg-gray-800/90 text-gray-800 dark:text-white hover:bg-white dark:hover:bg-gray-800'
-              }`}
-              title={playMode ? 'Stop loading sequence' : 'Play loading sequence – see items placed one by one'}
-            >
-              {playMode ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-              {playMode ? `Loading ${playIndex + 1}/${result.placedItems.length}` : 'Play Sequence'}
-            </button>
+            <LoadPlaySequenceButton
+              playMode={playMode}
+              playIndex={playIndex}
+              total={loadingSequence.length}
+              onToggle={togglePlay}
+            />
           )}
         </div>
         {result && selectedTruck ? (
@@ -932,8 +913,8 @@ export const Optimizer: React.FC = () => {
 
                 {/* Animated Items - Respect Focus Modes and Play Mode */}
                 {!focusCoG && (
-                  result.placedItems
-                    .slice(0, playMode ? playIndex + 1 : result.placedItems.length)
+                  loadingSequence
+                    .slice(0, visibleCount)
                     .filter(item => !focusedItemUuid || item.uuid === focusedItemUuid)
                     .map((item, index) => (
                       <AnimatedBox
@@ -954,17 +935,12 @@ export const Optimizer: React.FC = () => {
                 
                 {/* Center of Gravity Indicator */}
                 {result.centerOfGravity && (
-                  <group position={[
-                    result.centerOfGravity.z,
-                    result.centerOfGravity.y + 34, // 34 is floor height (30 group + 4 floor top)
-                    result.centerOfGravity.x
-                  ]}>
-                    <mesh>
-                      <sphereGeometry args={[12, 16, 16]} />
-                      <meshStandardMaterial color="#ef4444" emissive="#ef4444" emissiveIntensity={0.8} />
-                    </mesh>
-                    <pointLight color="#ef4444" intensity={2} distance={100} />
-                  </group>
+                  <CoGIndicator
+                    cog={result.centerOfGravity}
+                    floorOffset={34}
+                    radius={focusCoG ? 24 : 12}
+                    emphasized={focusCoG}
+                  />
                 )}
 
                 {/* Simple clean grid */}

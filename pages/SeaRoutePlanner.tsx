@@ -20,6 +20,12 @@ export const SeaRoutePlanner: React.FC = () => {
     handleOptimize();
   }, []);
 
+  useEffect(() => {
+    if (result && stops.length >= 2) {
+      handleOptimize();
+    }
+  }, [vesselMode]);
+
   const addStop = () => {
     setStops([...stops, { id: Date.now().toString(), address: '', city: '' }]);
   };
@@ -36,14 +42,19 @@ export const SeaRoutePlanner: React.FC = () => {
       return;
     }
 
+    const empty = stops.some((s) => !s.address?.trim());
+    if (empty) {
+      setError('Please search and select a port for every waypoint.');
+      return;
+    }
+
     setLoading(true);
     setError('');
     try {
       const res = await optimizeSeaRoute(stops, vesselMode);
-      
-      // Fetch live Sea Conditions for the midpoint
-      const midIdx = Math.floor(stops.length / 2);
-      const liveSea = await getSeaConditions(stops[midIdx].lat!, stops[midIdx].lng!);
+
+      const midIdx = Math.floor(res.stops.length / 2);
+      const liveSea = await getSeaConditions(res.stops[midIdx].lat!, res.stops[midIdx].lng!);
       
       // Determine impact
       let impact = "Optimal Conditions";
@@ -155,6 +166,7 @@ export const SeaRoutePlanner: React.FC = () => {
                         }}
                         placeholder="Search Port or Harbor..."
                         global={true}
+                        category="port"
                       />
                       <div className="mt-2 flex items-center gap-2">
                         <Droplets className="w-3 h-3 text-cyan-500" />
@@ -213,7 +225,7 @@ export const SeaRoutePlanner: React.FC = () => {
                   <div className="absolute inset-0 bg-cyan-500/5 translate-y-full group-hover:translate-y-0 transition-transform"></div>
                   <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Voyage Distance</div>
                   <div className="text-xl font-mono text-cyan-400 font-bold">{Math.round(result.totalDistanceKm).toLocaleString()} KM</div>
-                  <div className="text-[10px] text-cyan-500/60 font-bold mt-1">Snapping to Seaways</div>
+                  <div className="text-[10px] text-cyan-500/60 font-bold mt-1">Eurostat MARNET via searoute-ts</div>
                 </div>
                 <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl">
                   <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Estimated Arrival</div>
@@ -223,7 +235,9 @@ export const SeaRoutePlanner: React.FC = () => {
                 </div>
                 <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl">
                   <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Marine Fuel</div>
-                  <div className="text-xl font-mono text-orange-400 font-bold">{(result as any).fuelRequirement.toLocaleString()} MT</div>
+                  <div className="text-xl font-mono text-orange-400 font-bold">
+                    {((result as any).fuelRequirement ?? 0).toLocaleString()} MT
+                  </div>
                 </div>
                 <div className="bg-slate-900/80 border border-slate-800 p-4 rounded-2xl">
                   <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Hull Load</div>
@@ -279,19 +293,24 @@ export const SeaRoutePlanner: React.FC = () => {
             </div>
             {/* Path Diagnostics */}
             {result && (
-              <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
-                <div className="flex items-center gap-2 mb-4">
+              <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 space-y-4">
+                <div className="flex items-center gap-2">
                   <Navigation className="w-4 h-4 text-cyan-400" />
                   <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Optimized Seaway Path</h3>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {(result as any).hubSequence?.map((node: string, i: number) => (
+                  {result.hubSequence?.map((node, i) => (
                     <React.Fragment key={i}>
                       <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-1 rounded border border-slate-700">{node}</span>
-                      {i < (result as any).hubSequence.length - 1 && <span className="text-slate-600 text-[10px]">→</span>}
+                      {i < (result.hubSequence?.length ?? 0) - 1 && <span className="text-slate-600 text-[10px]">→</span>}
                     </React.Fragment>
-                  )) || <span className="text-[10px] text-slate-500">Direct Great Circle Path</span>}
+                  )) || <span className="text-[10px] text-slate-500">Computing maritime network path...</span>}
                 </div>
+                {result.routingEngine && (
+                  <p className="text-[10px] text-slate-500">
+                    {result.sequenceAlgorithm} · {result.routingEngine} · {result.geometryPointCount} geometry points
+                  </p>
+                )}
               </div>
             )}
           </div>
