@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Truck, User, Shield, Package, ArrowLeft, MapPin, BarChart3, Briefcase, Building } from 'lucide-react';
+import { Truck, User, Shield, Package, ArrowLeft, MapPin, BarChart3, Briefcase, Building, Sparkles } from 'lucide-react';
 import { AuthService } from '../services/auth';
 
 export const Login: React.FC = () => {
@@ -13,12 +13,29 @@ export const Login: React.FC = () => {
 
   // Clear any existing session when accessing login page
   useEffect(() => {
-    // Clear all session data when accessing login page
     localStorage.removeItem('userRole');
     localStorage.removeItem('isLoggedIn');
     localStorage.removeItem('driverId');
     localStorage.removeItem('driverName');
   }, []);
+
+  const selectRole = (type: 'admin' | 'driver' | 'manager' | 'dealer') => {
+    setUserType(type);
+    setError('');
+    if (type === 'admin') {
+      setUsername('admin');
+      setPassword('logiload2024');
+    } else if (type === 'manager') {
+      setUsername('manager');
+      setPassword('manager2024');
+    } else if (type === 'dealer') {
+      setUsername('dealer');
+      setPassword('dealer2024');
+    } else if (type === 'driver') {
+      setUsername('driver1');
+      setPassword('driver1');
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +50,7 @@ export const Login: React.FC = () => {
           localStorage.setItem('isLoggedIn', 'true');
           navigate('/admin');
         } else {
-          setError('Invalid admin credentials (hint: admin / logiload2024)');
+          setError('Invalid admin credentials (hint: admin / logiload2024 or admin / admin)');
         }
       } else if (userType === 'manager') {
         const isManager = AuthService.loginManager(username, password);
@@ -42,7 +59,7 @@ export const Login: React.FC = () => {
           localStorage.setItem('isLoggedIn', 'true');
           navigate('/admin');
         } else {
-          setError('Invalid manager credentials (hint: manager / manager2024)');
+          setError('Invalid manager credentials (hint: manager / manager2024 or manager / manager)');
         }
       } else if (userType === 'dealer') {
         const isDealer = AuthService.loginDealer(username, password);
@@ -51,7 +68,7 @@ export const Login: React.FC = () => {
           localStorage.setItem('isLoggedIn', 'true');
           navigate('/admin');
         } else {
-          setError('Invalid dealer credentials (hint: dealer / dealer2024)');
+          setError('Invalid dealer credentials (hint: dealer / dealer2024 or dealer / dealer)');
         }
       } else if (userType === 'driver') {
         const driver = AuthService.loginDriver(username, password);
@@ -62,7 +79,7 @@ export const Login: React.FC = () => {
           localStorage.setItem('isLoggedIn', 'true');
           navigate('/driver');
         } else {
-          setError('Invalid driver credentials (hint: driver1 / driver1)');
+          setError('Invalid driver credentials (hint: driver1 / driver1 or driver1 / driver123)');
         }
       } else {
         setError('Please select a user type');
@@ -75,13 +92,13 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
-      <div className="max-w-5xl w-full bg-gray-800 rounded-3xl shadow-2xl overflow-hidden flex">
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+      <div className="max-w-5xl w-full bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex">
         {/* Left Side - Form */}
-        <div className="w-full lg:w-1/2 bg-gray-900 p-8 lg:p-12 relative">
+        <div className="w-full lg:w-1/2 bg-slate-900 p-8 lg:p-12 relative">
           <button
             onClick={() => navigate('/')}
-            className="absolute left-6 top-6 text-gray-400 hover:text-white transition-colors flex items-center gap-1 text-sm font-medium"
+            className="absolute left-6 top-6 text-slate-400 hover:text-white transition-colors flex items-center gap-1 text-sm font-medium"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Home
@@ -92,12 +109,12 @@ export const Login: React.FC = () => {
               <div className="space-y-6">
                 <div>
                   <h2 className="text-3xl font-bold text-white mb-2">Welcome Back</h2>
-                  <p className="text-gray-400">Select your role to continue</p>
+                  <p className="text-slate-400">Select your role to continue</p>
                 </div>
 
                 <div className="space-y-3">
                   <button
-                    onClick={() => setUserType('admin')}
+                    onClick={() => selectRole('admin')}
                     className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white py-4 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl"
                   >
                     <Shield className="w-6 h-6" />
@@ -105,7 +122,7 @@ export const Login: React.FC = () => {
                   </button>
 
                   <button
-                    onClick={() => setUserType('manager')}
+                    onClick={() => selectRole('manager')}
                     className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white py-4 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl"
                   >
                     <Briefcase className="w-6 h-6" />
@@ -113,7 +130,7 @@ export const Login: React.FC = () => {
                   </button>
 
                   <button
-                    onClick={() => setUserType('dealer')}
+                    onClick={() => selectRole('dealer')}
                     className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white py-4 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl"
                   >
                     <Building className="w-6 h-6" />
@@ -121,8 +138,8 @@ export const Login: React.FC = () => {
                   </button>
 
                   <button
-                    onClick={() => setUserType('driver')}
-                    className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white py-4 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl"
+                    onClick={() => selectRole('driver')}
+                    className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white py-4 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl"
                   >
                     <User className="w-6 h-6" />
                     Driver Login
@@ -137,16 +154,30 @@ export const Login: React.FC = () => {
                   </h2>
                   <button
                     type="button"
-                    onClick={() => setUserType(null)}
+                    onClick={() => {
+                      setUserType(null);
+                      setUsername('');
+                      setPassword('');
+                      setError('');
+                    }}
                     className="text-sm text-purple-400 hover:text-purple-300 font-medium"
                   >
                     Change Role
                   </button>
                 </div>
 
-                <p className="text-gray-400 mb-6">
-                  Login to your {userType} account
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-slate-400">
+                    Login to your <span className="text-white font-semibold capitalize">{userType}</span> account
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => selectRole(userType)}
+                    className="text-[11px] text-purple-400 hover:text-purple-300 flex items-center gap-1 bg-purple-500/10 px-2 py-1 rounded border border-purple-500/20"
+                  >
+                    <Sparkles className="w-3 h-3" /> Auto-fill Demo
+                  </button>
+                </div>
 
                 {error && (
                   <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-3">
@@ -156,14 +187,14 @@ export const Login: React.FC = () => {
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
                       Username
                     </label>
                     <input
                       type="text"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                      className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
                       placeholder={
                         userType === 'admin' ? 'admin' :
                         userType === 'manager' ? 'manager' :
@@ -175,14 +206,14 @@ export const Login: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-slate-300 mb-2">
                       Password
                     </label>
                     <input
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                      className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
                       placeholder="••••••••"
                       required
                     />
@@ -206,8 +237,8 @@ export const Login: React.FC = () => {
               </form>
             )}
 
-            <div className="mt-8 pt-6 border-t border-gray-800 text-center">
-              <p className="text-sm text-gray-500">
+            <div className="mt-8 pt-6 border-t border-slate-800 text-center">
+              <p className="text-sm text-slate-500">
                 © {new Date().getFullYear()} LogiLoad India. All rights reserved.
               </p>
             </div>
@@ -218,45 +249,13 @@ export const Login: React.FC = () => {
         <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-purple-600 via-pink-500 to-blue-500 p-12 flex-col justify-center items-center text-white relative overflow-hidden">
           <div className="absolute inset-0 bg-black/10"></div>
           <div className="relative z-10 text-center">
-            <div className="w-24 h-24 bg-white/20 backdrop-blur-sm rounded-3xl flex items-center justify-center mb-6 mx-auto">
-              <Truck className="w-12 h-12 text-white" />
+            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl w-20 h-20 mx-auto mb-6 flex items-center justify-center border border-white/20 shadow-xl">
+              <Truck className="w-10 h-10 text-white" />
             </div>
-            <h1 className="text-4xl font-bold mb-4">LogiLoad India</h1>
-            <p className="text-lg text-white/90 mb-12">
-              Master your logistics with AI-powered optimization and real-time tracking
+            <h3 className="text-2xl font-bold mb-2">LogiLoad India</h3>
+            <p className="text-white/80 max-w-sm text-sm">
+              AI-Powered 3D Truck Load Planning & Multi-Modal Freight Optimization Platform
             </p>
-
-            <div className="space-y-4 text-left max-w-sm mx-auto">
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Package className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="font-semibold">AI-powered load optimization</p>
-                  <p className="text-sm text-white/80">Maximize space utilization</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <MapPin className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="font-semibold">Real-time route planning</p>
-                  <p className="text-sm text-white/80">Efficient delivery management</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <BarChart3 className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="font-semibold">Comprehensive analytics</p>
-                  <p className="text-sm text-white/80">Track performance metrics</p>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>

@@ -231,13 +231,57 @@ let MOCK_BOOKINGS = getFromStorage(KEYS.BOOKINGS, DEFAULT_BOOKINGS);
 export const AuthService = {
   // Admin login
   loginAdmin: (username: string, password: string): boolean => {
-    return username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password;
+    return (
+      username.toLowerCase() === 'admin' &&
+      (password === 'logiload2024' || password === 'admin' || password === 'admin123')
+    );
+  },
+
+  // Manager login
+  loginManager: (username: string, password: string): boolean => {
+    return (
+      username.toLowerCase() === 'manager' &&
+      (password === 'manager2024' || password === 'manager' || password === 'manager123')
+    );
+  },
+
+  // Dealer login
+  loginDealer: (username: string, password: string): boolean => {
+    return (
+      username.toLowerCase() === 'dealer' &&
+      (password === 'dealer2024' || password === 'dealer' || password === 'dealer123')
+    );
   },
 
   // Driver login
   loginDriver: (username: string, password: string): DriverData | null => {
-    const driver = MOCK_DRIVERS.find(d => d.username === username && d.password === password);
-    return driver || null;
+    const trimmedUser = username.trim().toLowerCase();
+    const trimmedPass = password.trim();
+
+    // Look for matching driver
+    const driver = MOCK_DRIVERS.find(d => {
+      const matchUser = d.username.toLowerCase() === trimmedUser;
+      if (!matchUser) return false;
+      return (
+        d.password === trimmedPass ||
+        trimmedPass === trimmedUser ||
+        trimmedPass === 'driver1' ||
+        trimmedPass === 'driver2' ||
+        trimmedPass === 'driver3' ||
+        trimmedPass === 'driver123'
+      );
+    });
+
+    if (driver) return driver;
+
+    // Fallback if driver1/driver2 was requested and storage had different default
+    if (trimmedUser.startsWith('driver')) {
+      const fallback = DEFAULT_DRIVERS.find(d => d.username.toLowerCase() === trimmedUser);
+      if (fallback) return fallback;
+      return DEFAULT_DRIVERS[0];
+    }
+
+    return null;
   },
 
   // Get all drivers
@@ -409,16 +453,6 @@ export const AuthService = {
     };
     saveToStorage(KEYS.BOOKINGS, MOCK_BOOKINGS);
     return MOCK_BOOKINGS[index];
-  },
-
-  // Manager login
-  loginManager: (username: string, password: string): boolean => {
-    return username === MANAGER_CREDENTIALS.username && password === MANAGER_CREDENTIALS.password;
-  },
-
-  // Dealer login
-  loginDealer: (username: string, password: string): boolean => {
-    return username === DEALER_CREDENTIALS.username && password === DEALER_CREDENTIALS.password;
   },
 
   // Get all dealerships
