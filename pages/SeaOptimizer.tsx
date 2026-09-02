@@ -6,10 +6,12 @@ import { packCargo, getLoadingSequence } from '../services/packer';
 import { useLoadPlaySequence } from '../hooks/useLoadPlaySequence';
 import { LoadPlaySequenceButton } from '../components/LoadPlaySequenceButton';
 import { Truck, Item, PlacedItem, LoadResult } from '../types';
-import { Anchor, Package, Zap, Waves, Shield, Info, AlertCircle, RefreshCw, BarChart3, Droplets } from 'lucide-react';
+import { Anchor, Package, Zap, Waves, Shield, Info, AlertCircle, RefreshCw, BarChart3, Droplets, Download, FileText } from 'lucide-react';
 import { VESSEL_OPTIONS } from '../constants';
 import { LoadAiInsightPanel } from '../components/LoadAiInsightPanel';
 import { CoGIndicator } from '../components/CoGIndicator';
+import { useDarkMode } from '../contexts/DarkModeContext';
+import { PdfExportService } from '../services/pdfExport';
 import * as THREE from 'three';
 
 // -- 3D COMPONENTS --
@@ -417,6 +419,7 @@ const VesselHull: React.FC<{ dimensions: { l: number, w: number, h: number } }> 
 };
 
 export const SeaOptimizer: React.FC = () => {
+  const { isDarkMode } = useDarkMode();
   const [selectedVessel, setSelectedVessel] = useState(VESSEL_OPTIONS[0]);
   const [items, setItems] = useState<Item[]>([]);
   const [loadResult, setLoadResult] = useState<LoadResult | null>(null);
@@ -450,19 +453,19 @@ export const SeaOptimizer: React.FC = () => {
   };
 
   return (
-    <div className="flex h-[calc(100vh-64px)] bg-slate-50 text-slate-900 overflow-hidden font-sans">
+    <div className="flex flex-col lg:flex-row h-[calc(100vh-64px)] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden font-sans rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
       {/* Left Sidebar */}
-      <div className="w-80 bg-white border-r border-slate-200 p-6 flex flex-col gap-6 shadow-xl z-10 overflow-y-auto custom-scrollbar">
+      <div className="w-full lg:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-5 lg:p-6 flex flex-col gap-5 shadow-sm z-10 overflow-y-auto custom-scrollbar transition-colors">
         <div>
-          <h2 className="text-xl font-black flex items-center gap-2 text-blue-600 uppercase tracking-tighter">
+          <h2 className="text-xl font-black flex items-center gap-2 text-cyan-600 dark:text-cyan-400 uppercase tracking-tighter">
             <Anchor className="w-6 h-6" />
             Sea Cargo CAD
           </h2>
-          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">Technical Load Specification</p>
+          <p className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Technical Load Specification</p>
         </div>
 
-        <div className="space-y-4">
-          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Vessel Configuration</label>
+        <div className="space-y-3">
+          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Vessel Configuration</label>
           <div className="grid gap-2">
             {VESSEL_OPTIONS.map(v => (
               <button
@@ -471,14 +474,14 @@ export const SeaOptimizer: React.FC = () => {
                   setSelectedVessel(v);
                   handleOptimize(items, v);
                 }}
-                className={`p-4 rounded-lg border-2 text-left transition-all ${
+                className={`p-3.5 rounded-xl border-2 text-left transition-all ${
                   selectedVessel.id === v.id 
-                    ? 'bg-blue-50 border-blue-600 shadow-md scale-[1.02]' 
-                    : 'bg-white border-slate-100 hover:border-slate-300'
+                    ? 'bg-cyan-50 dark:bg-cyan-500/10 border-cyan-500 shadow-sm scale-[1.01]' 
+                    : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                 }`}
               >
-                <div className="font-black text-sm text-slate-800">{v.name}</div>
-                <div className="text-[10px] text-slate-500 font-mono mt-1 flex justify-between">
+                <div className="font-bold text-sm text-slate-900 dark:text-white">{v.name}</div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono mt-1 flex justify-between">
                   <span>CAP: {v.maxWeight/1000} MT</span>
                   <span>LEN: {v.dimensions.length/100}m</span>
                 </div>
@@ -487,37 +490,37 @@ export const SeaOptimizer: React.FC = () => {
           </div>
         </div>
 
-        <div className="space-y-4">
-          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Structural Telemetry</label>
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+        <div className="space-y-3">
+          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Structural Telemetry</label>
+          <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
             <div className="flex justify-between items-center text-[10px] font-mono">
-              <span className="text-slate-500">METACENTRIC_HEIGHT</span>
-              <span className="text-blue-600 font-bold">1.25m</span>
+              <span className="text-slate-500 dark:text-slate-400">METACENTRIC_HEIGHT</span>
+              <span className="text-cyan-600 dark:text-cyan-400 font-bold">1.25m</span>
             </div>
             <div className="flex justify-between items-center text-[10px] font-mono">
-              <span className="text-slate-500">DRAFT_LEVEL_CALC</span>
-              <span className="text-blue-600 font-bold">14.2m</span>
+              <span className="text-slate-500 dark:text-slate-400">DRAFT_LEVEL_CALC</span>
+              <span className="text-cyan-600 dark:text-cyan-400 font-bold">14.2m</span>
             </div>
-            <div className="h-2 bg-slate-200 rounded-full overflow-hidden p-[2px]">
-              <div className="h-full bg-blue-600 rounded-full" style={{ width: '85%' }}></div>
+            <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden p-[2px]">
+              <div className="h-full bg-cyan-500 rounded-full" style={{ width: '85%' }}></div>
             </div>
-            <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-600">
-              <Shield className="w-3 h-3" />
+            <div className="flex items-center gap-2 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+              <Shield className="w-3.5 h-3.5" />
               <span>STABILITY_NOMINAL</span>
             </div>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Waypoints</label>
-          <div className="bg-white border-2 border-dashed border-slate-200 rounded-xl p-3 space-y-2">
+        <div className="space-y-3">
+          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Waypoints</label>
+          <div className="bg-slate-50 dark:bg-slate-800/40 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-3 space-y-2">
              <div className="flex justify-between text-[10px] font-mono">
-                <span className="text-slate-400">NEXT_PORT</span>
-                <span className="text-slate-800 font-bold">ROTTERDAM</span>
+                <span className="text-slate-400 dark:text-slate-500">NEXT_PORT</span>
+                <span className="text-slate-800 dark:text-slate-200 font-bold">ROTTERDAM</span>
              </div>
              <div className="flex justify-between text-[10px] font-mono">
-                <span className="text-slate-400">ETA_EST</span>
-                <span className="text-slate-800 font-bold">14 MAY 2026</span>
+                <span className="text-slate-400 dark:text-slate-500">ETA_EST</span>
+                <span className="text-slate-800 dark:text-slate-200 font-bold">14 MAY 2026</span>
              </div>
           </div>
         </div>
@@ -527,45 +530,55 @@ export const SeaOptimizer: React.FC = () => {
             mode="sea"
             vehicle={selectedVessel}
             loadResult={loadResult}
-            theme="light"
+            theme={isDarkMode ? 'dark' : 'light'}
             focusCoG={focusCoG}
             onToggleFocusCoG={() => setFocusCoG((v) => !v)}
           />
         )}
 
-        <div className="mt-auto">
+        <div className="mt-auto pt-2 space-y-2">
           <button 
             onClick={() => handleOptimize()}
             disabled={isOptimizing}
-            className="w-full py-4 bg-slate-900 text-white rounded-lg font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 hover:bg-blue-600 transition-all shadow-lg active:scale-95"
+            className="w-full py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-bold uppercase tracking-wider text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-cyan-600/20 active:scale-[0.98]"
           >
-            {isOptimizing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5 fill-current" />}
+            {isOptimizing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 fill-current" />}
             GENERATE LOAD PLAN
           </button>
+
+          {loadResult && (
+            <button
+              onClick={() => selectedVessel && loadResult && PdfExportService.generate3DLoadManifestPdf(selectedVessel, loadResult, items, 'sea')}
+              className="w-full py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-700 rounded-xl font-semibold flex items-center justify-center gap-2 text-xs transition"
+            >
+              <Download className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
+              Export Bill of Lading (B/L) PDF
+            </button>
+          )}
         </div>
       </div>
 
       {/* Main 3D Canvas */}
-      <div className="flex-grow min-h-[450px] md:min-h-0 relative bg-[#090d16]">
-        <div className="absolute top-10 left-10 z-20">
-           <div className="bg-slate-950/85 backdrop-blur-md px-6 py-3 border-2 border-slate-800 shadow-2xl">
-              <h1 className="text-xl font-black tracking-tighter uppercase text-slate-100">Blueprint: Vessel Load Plan</h1>
-              <div className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Technical CAD Drawing Mode</div>
+      <div className="flex-grow min-h-[450px] md:min-h-0 relative bg-slate-900 dark:bg-[#090d16] transition-colors">
+        <div className="absolute top-6 left-6 z-20">
+           <div className="bg-white/90 dark:bg-slate-950/85 backdrop-blur-md px-5 py-2.5 border border-slate-200 dark:border-slate-800 shadow-xl rounded-2xl">
+              <h1 className="text-lg font-black tracking-tighter uppercase text-slate-900 dark:text-slate-100">Blueprint: Vessel Load Plan</h1>
+              <div className="text-[10px] font-bold text-cyan-600 dark:text-cyan-400 uppercase tracking-widest">Technical CAD Drawing Mode</div>
            </div>
         </div>
 
-        <div className="absolute top-10 right-10 z-20 flex gap-2">
+        <div className="absolute top-6 right-6 z-20 flex gap-2">
           <LoadPlaySequenceButton
             playMode={playMode}
             playIndex={playIndex}
             total={loadingSequence.length}
             onToggle={togglePlay}
-            variant="dark"
+            variant={isDarkMode ? "dark" : "light"}
           />
         </div>
 
         <Canvas shadows camera={{ position: [1500, 1000, 1500], fov: 45, far: 20000 }}>
-          <color attach="background" args={['#090d16']} />
+          <color attach="background" args={[isDarkMode ? '#090d16' : '#1e293b']} />
           <OrbitControls makeDefault target={[selectedVessel.dimensions.width/2, 0, selectedVessel.dimensions.length/2]} />
           <Environment preset="city" />
           <ambientLight intensity={0.7} />
@@ -605,22 +618,22 @@ export const SeaOptimizer: React.FC = () => {
         </Canvas>
 
         {loadResult && (
-          <div className="absolute bottom-10 left-10 z-20 bg-slate-950/90 backdrop-blur-md p-6 border-2 border-slate-800 w-72 shadow-2xl text-slate-100">
-             <div className="space-y-4 font-mono text-[10px]">
-                <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                   <span className="text-slate-400 font-bold uppercase">Tonnage_Measurement</span>
-                   <span className="text-slate-100 font-black">{(loadResult.totalWeight / 1000).toFixed(1)} MT</span>
+          <div className="absolute bottom-6 left-6 z-20 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md p-5 border border-slate-200 dark:border-slate-800 w-72 shadow-xl text-slate-900 dark:text-slate-100 rounded-2xl">
+             <div className="space-y-3 font-mono text-[10px]">
+                <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-2">
+                   <span className="text-slate-500 dark:text-slate-400 font-bold uppercase">Tonnage_Measurement</span>
+                   <span className="text-slate-900 dark:text-slate-100 font-black">{(loadResult.totalWeight / 1000).toFixed(1)} MT</span>
                 </div>
-                <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                   <span className="text-slate-400 font-bold uppercase">Vol_Utilization_Index</span>
-                   <span className="text-blue-400 font-black">{loadResult.volumeUtilization.toFixed(1)}%</span>
+                <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-2">
+                   <span className="text-slate-500 dark:text-slate-400 font-bold uppercase">Vol_Utilization_Index</span>
+                   <span className="text-cyan-600 dark:text-cyan-400 font-black">{loadResult.volumeUtilization.toFixed(1)}%</span>
                 </div>
-                <div className="flex justify-between items-center pt-2">
-                   <span className="text-slate-400 font-bold uppercase">Hull_Stress_Check</span>
-                   <span className="bg-emerald-600 text-white px-2 py-0.5 rounded-sm font-black">PASS</span>
+                <div className="flex justify-between items-center pt-1">
+                   <span className="text-slate-500 dark:text-slate-400 font-bold uppercase">Hull_Stress_Check</span>
+                   <span className="bg-emerald-600 text-white px-2 py-0.5 rounded font-black">PASS</span>
                 </div>
-                <div className="mt-4 pt-4 border-t border-slate-800">
-                   <div className="text-[8px] text-slate-500 leading-tight italic">
+                <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+                   <div className="text-[8px] text-slate-400 leading-tight italic">
                       Disclaimer: This CAD model is for logistical planning only. 
                       Not a certified marine engineering document.
                    </div>

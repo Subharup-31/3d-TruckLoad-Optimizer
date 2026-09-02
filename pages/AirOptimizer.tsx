@@ -6,10 +6,12 @@ import { packCargo, getLoadingSequence } from '../services/packer';
 import { useLoadPlaySequence } from '../hooks/useLoadPlaySequence';
 import { LoadPlaySequenceButton } from '../components/LoadPlaySequenceButton';
 import { Truck, Item, PlacedItem, LoadResult } from '../types';
-import { Plane, Package, Zap, Wind, Shield, Info, AlertCircle, RefreshCw, BarChart3, Cloud, Anchor } from 'lucide-react';
+import { Plane, Package, Zap, Wind, Shield, Info, AlertCircle, RefreshCw, BarChart3, Cloud, Anchor, Download, FileText } from 'lucide-react';
 import { AIRCRAFT_OPTIONS } from '../constants';
 import { LoadAiInsightPanel } from '../components/LoadAiInsightPanel';
 import { CoGIndicator } from '../components/CoGIndicator';
+import { useDarkMode } from '../contexts/DarkModeContext';
+import { PdfExportService } from '../services/pdfExport';
 import * as THREE from 'three';
 
 // -- 3D COMPONENTS --
@@ -129,8 +131,8 @@ const AvionicsRack: React.FC<{ args: [number, number, number], color: string }> 
       </mesh>
       {/* Glowing panels / server units */}
       {Array.from({ length: 4 }).map((_, idx) => (
-        <mesh key={`panel-${idx}`} position={[w/2 + 0.02, h * 0.3 - idx * (h * 0.2), 0]}>
-          <planeGeometry args={[d * 0.8, h * 0.12]} rotation={[0, Math.PI/2, 0]} />
+        <mesh key={`panel-${idx}`} position={[w/2 + 0.02, h * 0.3 - idx * (h * 0.2), 0]} rotation={[0, Math.PI/2, 0]}>
+          <planeGeometry args={[d * 0.8, h * 0.12]} />
           <meshStandardMaterial color="#111" emissive={idx % 2 === 0 ? "#00ff66" : "#00aaff"} emissiveIntensity={0.8} />
         </mesh>
       ))}
@@ -503,6 +505,7 @@ const PlaneContainer: React.FC<{ dimensions: { l: number, w: number, h: number }
 };
 
 export const AirOptimizer: React.FC = () => {
+  const { isDarkMode } = useDarkMode();
   const [selectedPlane, setSelectedPlane] = useState(AIRCRAFT_OPTIONS[0]);
   const [items, setItems] = useState<Item[]>([]);
   const [loadResult, setLoadResult] = useState<LoadResult | null>(null);
@@ -548,33 +551,33 @@ export const AirOptimizer: React.FC = () => {
   };
 
   return (
-    <div className="flex h-[calc(100vh-64px)] bg-slate-950 text-white overflow-hidden">
+    <div className="flex flex-col lg:flex-row h-[calc(100vh-64px)] bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
       {/* Left Control Panel */}
-      <div className="w-80 bg-slate-900 border-r border-slate-800 flex flex-col shadow-2xl z-10 min-h-0">
-        <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-5 custom-scrollbar">
+      <div className="w-full lg:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shadow-sm z-10 min-h-0 transition-colors">
+        <div className="flex-1 overflow-y-auto p-5 lg:p-6 flex flex-col gap-5 custom-scrollbar">
         <div>
-          <h2 className="text-xl font-bold flex items-center gap-2 text-blue-400">
+          <h2 className="text-xl font-bold flex items-center gap-2 text-blue-600 dark:text-blue-400">
             <Plane className="w-6 h-6" />
             Air Cargo Intel
           </h2>
-          <p className="text-slate-400 text-xs mt-1">Global Aviation Logistics Engine</p>
+          <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5">Global Aviation Logistics Engine</p>
         </div>
 
         <div className="space-y-3">
-          <label className="block text-sm font-medium text-slate-300">Select Aircraft</label>
+          <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Select Aircraft</label>
           <div className="grid gap-2">
             {AIRCRAFT_OPTIONS.map(plane => (
               <button
                 key={plane.id}
                 onClick={() => handlePlaneChange(plane.id)}
-                className={`p-3 rounded-xl border text-left transition-all ${
+                className={`p-3.5 rounded-xl border text-left transition-all ${
                   selectedPlane.id === plane.id 
-                    ? 'bg-blue-600/20 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]' 
-                    : 'bg-slate-800 border-slate-700 hover:border-slate-500'
+                    ? 'bg-blue-50 dark:bg-blue-600/20 border-blue-500 shadow-sm' 
+                    : 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                 }`}
               >
-                <div className="font-bold text-sm">{plane.name}</div>
-                <div className="text-[10px] text-slate-400 flex justify-between mt-1">
+                <div className="font-bold text-sm text-slate-900 dark:text-white">{plane.name}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 flex justify-between mt-1">
                   <span>Cap: {plane.maxWeight/1000} Tons</span>
                   <span>{plane.dimensions.length/100}m Long</span>
                 </div>
@@ -589,65 +592,75 @@ export const AirOptimizer: React.FC = () => {
             mode="air"
             vehicle={selectedPlane}
             loadResult={loadResult}
-            theme="dark"
+            theme={isDarkMode ? 'dark' : 'light'}
             focusCoG={focusCoG}
             onToggleFocusCoG={() => setFocusCoG((v) => !v)}
           />
         ) : (
-          <div className="p-4 rounded-xl border border-slate-700 bg-slate-800/50 text-center text-xs text-slate-400">
-            Run <span className="text-blue-400 font-semibold">Calculate Flight Load</span> to see AI Stability Analysis.
+          <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-center text-xs text-slate-500 dark:text-slate-400">
+            Run <span className="text-blue-500 font-semibold">Calculate Flight Load</span> to see AI Stability Analysis.
           </div>
         )}
 
         {loadResult && (
           <div className="space-y-3">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Utilization</h3>
-            <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700">
+            <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Utilization</h3>
+            <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
               <div className="flex justify-between text-xs mb-1">
-                <span className="text-slate-400">Volume</span>
-                <span className="text-blue-400 font-bold">{loadResult.volumeUtilization.toFixed(1)}%</span>
+                <span className="text-slate-500 dark:text-slate-400">Volume</span>
+                <span className="text-blue-600 dark:text-blue-400 font-bold">{loadResult.volumeUtilization.toFixed(1)}%</span>
               </div>
-              <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+              <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                 <div className="h-full bg-blue-500" style={{ width: `${loadResult.volumeUtilization}%` }}></div>
               </div>
             </div>
-            <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-700">
+            <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
               <div className="flex justify-between text-xs mb-1">
-                <span className="text-slate-400">Weight & Balance</span>
-                <span className={loadResult.weightUtilization > 95 ? 'text-red-400' : 'text-green-400'}>
+                <span className="text-slate-500 dark:text-slate-400">Weight & Balance</span>
+                <span className={loadResult.weightUtilization > 95 ? 'text-rose-500 font-bold' : 'text-emerald-500 font-bold'}>
                   {loadResult.weightUtilization.toFixed(1)}%
                 </span>
               </div>
-              <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                <div className={`h-full ${loadResult.weightUtilization > 95 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${loadResult.weightUtilization}%` }}></div>
+              <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div className={`h-full ${loadResult.weightUtilization > 95 ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${loadResult.weightUtilization}%` }}></div>
               </div>
             </div>
           </div>
         )}
         </div>
 
-        <div className="p-6 pt-4 border-t border-slate-800 shrink-0">
-        <button 
-          onClick={() => handleOptimize()}
-          disabled={isOptimizing}
-          className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl font-bold flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all shadow-lg"
-        >
-          {isOptimizing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5 fill-current" />}
-          CALCULATE FLIGHT LOAD
-        </button>
+        <div className="p-5 lg:p-6 pt-3 border-t border-slate-200 dark:border-slate-800 shrink-0 space-y-2">
+          <button 
+            onClick={() => handleOptimize()}
+            disabled={isOptimizing}
+            className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 active:scale-[0.98] transition-all text-xs uppercase tracking-wider"
+          >
+            {isOptimizing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4 fill-current" />}
+            CALCULATE FLIGHT LOAD
+          </button>
+
+          {loadResult && (
+            <button
+              onClick={() => selectedPlane && loadResult && PdfExportService.generate3DLoadManifestPdf(selectedPlane, loadResult, items, 'air')}
+              className="w-full py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-700 rounded-xl font-semibold flex items-center justify-center gap-2 text-xs transition"
+            >
+              <Download className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              Export Air Waybill (AWB) PDF
+            </button>
+          )}
         </div>
       </div>
 
       {/* Main 3D Canvas */}
-      <div className="flex-grow min-h-[450px] md:min-h-0 relative bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black">
+      <div className="flex-grow min-h-[450px] md:min-h-0 relative bg-slate-900 dark:bg-slate-950 transition-colors">
         <div className="absolute top-6 left-6 z-10 flex gap-2">
-          <div className="bg-slate-900/80 backdrop-blur-md px-4 py-2 rounded-full border border-slate-700 flex items-center gap-3 text-sm">
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-              <span className="text-slate-300">Ready for Boarding</span>
+          <div className="bg-white/90 dark:bg-slate-900/80 backdrop-blur-md px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 flex items-center gap-3 text-xs shadow-md">
+            <div className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+              <span className="text-slate-700 dark:text-slate-300 font-medium">Ready for Boarding</span>
             </div>
-            <div className="w-px h-4 bg-slate-700"></div>
-            <span className="text-blue-400 font-mono">36° N, 140° E</span>
+            <div className="w-px h-3.5 bg-slate-200 dark:bg-slate-700"></div>
+            <span className="text-blue-600 dark:text-blue-400 font-mono font-semibold">36° N, 140° E</span>
           </div>
         </div>
 
@@ -657,26 +670,26 @@ export const AirOptimizer: React.FC = () => {
             playIndex={playIndex}
             total={loadingSequence.length}
             onToggle={togglePlay}
-            variant="dark"
+            variant={isDarkMode ? "dark" : "light"}
           />
           <button 
             onClick={() => setViewMode('3d')}
-            className={`p-2 rounded-lg border transition-all ${viewMode === '3d' ? 'bg-blue-600 border-blue-500' : 'bg-slate-900/80 border-slate-700'}`}
+            className={`p-2 rounded-xl border transition-all ${viewMode === '3d' ? 'bg-blue-600 border-blue-500 text-white shadow-sm' : 'bg-white/90 dark:bg-slate-900/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'}`}
           >
-            <Plane className="w-5 h-5" />
+            <Plane className="w-4 h-4" />
           </button>
           <button 
             onClick={() => setViewMode('stats')}
-            className={`p-2 rounded-lg border transition-all ${viewMode === 'stats' ? 'bg-blue-600 border-blue-500' : 'bg-slate-900/80 border-slate-700'}`}
+            className={`p-2 rounded-xl border transition-all ${viewMode === 'stats' ? 'bg-blue-600 border-blue-500 text-white shadow-sm' : 'bg-white/90 dark:bg-slate-900/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'}`}
           >
-            <BarChart3 className="w-5 h-5" />
+            <BarChart3 className="w-4 h-4" />
           </button>
         </div>
 
         {viewMode === '3d' ? (
           <Canvas shadows camera={{ position: [-5000, 3000, 2000], fov: 40, far: 50000 }}>
-            <color attach="background" args={['#cc5500']} />
-            <fogExp2 attach="fog" args={['#cc5500', 0.00005]} />
+            <color attach="background" args={[isDarkMode ? '#0f172a' : '#1e293b']} />
+            <fogExp2 attach="fog" args={[isDarkMode ? '#0f172a' : '#1e293b', 0.00005]} />
             <PerspectiveCamera makeDefault position={[-5000, 3500, 2500]} far={50000} />
             <OrbitControls 
               makeDefault 
@@ -722,106 +735,50 @@ export const AirOptimizer: React.FC = () => {
             )}
           </Canvas>
         ) : (
-          <div className="p-10 h-full overflow-auto">
-             <h2 className="text-2xl font-bold mb-6 text-blue-400">Flight Manifest Details</h2>
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-                   <div className="text-slate-400 text-sm mb-2">Total Weight</div>
-                   <div className="text-4xl font-bold">{(loadResult?.totalWeight || 0).toLocaleString()} <span className="text-lg text-slate-500 font-light">kg</span></div>
-                   <div className="text-xs text-blue-400 mt-2">Max allowed: {selectedPlane.maxWeight.toLocaleString()} kg</div>
+          <div className="p-8 h-full overflow-auto bg-slate-50 dark:bg-slate-900 transition-colors">
+             <h2 className="text-xl font-bold mb-6 text-blue-600 dark:text-blue-400">Flight Manifest Details</h2>
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div className="bg-white dark:bg-slate-800/80 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                   <div className="text-slate-500 dark:text-slate-400 text-xs mb-2 uppercase tracking-wider font-semibold">Total Weight</div>
+                   <div className="text-3xl font-black text-slate-900 dark:text-white">{(loadResult?.totalWeight || 0).toLocaleString()} <span className="text-base text-slate-400 font-normal">kg</span></div>
+                   <div className="text-xs text-blue-600 dark:text-blue-400 mt-2 font-medium">Max allowed: {selectedPlane.maxWeight.toLocaleString()} kg</div>
                 </div>
-                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-                   <div className="text-slate-400 text-sm mb-2">Loaded Items</div>
-                   <div className="text-4xl font-bold">{loadResult?.placedItems.length || 0}</div>
-                   <div className="text-xs text-red-400 mt-2">{loadResult?.unplacedItems.length || 0} items rejected due to size/weight</div>
+                <div className="bg-white dark:bg-slate-800/80 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                   <div className="text-slate-500 dark:text-slate-400 text-xs mb-2 uppercase tracking-wider font-semibold">Loaded Items</div>
+                   <div className="text-3xl font-black text-slate-900 dark:text-white">{loadResult?.placedItems.length || 0}</div>
+                   <div className="text-xs text-rose-500 mt-2 font-medium">{loadResult?.unplacedItems.length || 0} items rejected due to size/weight</div>
                 </div>
-                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-                   <div className="text-slate-400 text-sm mb-2">Estimated Fuel Burn</div>
-                   <div className="text-4xl font-bold text-orange-400">{((loadResult?.totalWeight || 0) * 0.12).toFixed(1)} <span className="text-lg text-slate-500 font-light">L/hr</span></div>
+                <div className="bg-white dark:bg-slate-800/80 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                   <div className="text-slate-500 dark:text-slate-400 text-xs mb-2 uppercase tracking-wider font-semibold">Estimated Fuel Burn</div>
+                   <div className="text-3xl font-black text-amber-500">{((loadResult?.totalWeight || 0) * 0.12).toFixed(1)} <span className="text-base text-slate-400 font-normal">L/hr</span></div>
                 </div>
              </div>
           </div>
         )}
 
         {/* Load Plan HUD Overlay */}
-        <div className="absolute top-24 left-6 z-20">
-           <div className="bg-black/60 backdrop-blur-md px-6 py-3 border-l-4 border-orange-500 shadow-2xl">
-              <h1 className="text-xl font-black tracking-tighter uppercase text-orange-400">✈️ Cargo Aircraft Loading System</h1>
+        <div className="absolute top-20 left-6 z-20">
+           <div className="bg-white/90 dark:bg-slate-950/80 backdrop-blur-md px-5 py-2.5 border-l-4 border-blue-500 shadow-lg rounded-r-xl border-y border-r border-slate-200 dark:border-slate-800">
+              <h1 className="text-sm font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">✈️ Cargo Aircraft Loading System</h1>
            </div>
         </div>
 
         {loadResult && (
-          <div className="absolute bottom-10 left-10 z-20 bg-black/60 backdrop-blur-md p-6 rounded-sm border border-white/10 w-64 shadow-2xl">
-             <div className="space-y-3 font-mono text-sm">
+          <div className="absolute bottom-6 left-6 z-20 bg-white/90 dark:bg-slate-950/80 backdrop-blur-md p-5 rounded-2xl border border-slate-200 dark:border-slate-800 w-64 shadow-xl text-slate-900 dark:text-slate-100">
+             <div className="space-y-2.5 font-mono text-xs">
                 <div className="flex justify-between items-center">
-                   <span className="text-slate-300">Space Utilized</span>
-                   <span className="text-white font-bold">{loadResult.volumeUtilization.toFixed(1)}%</span>
+                   <span className="text-slate-500 dark:text-slate-400">Space Utilized</span>
+                   <span className="text-slate-900 dark:text-white font-bold">{loadResult.volumeUtilization.toFixed(1)}%</span>
                 </div>
                 <div className="flex justify-between items-center">
-                   <span className="text-slate-300">Items Loaded</span>
-                   <span className="text-white font-bold">{loadResult.placedItems.length}</span>
+                   <span className="text-slate-500 dark:text-slate-400">Payload Weight</span>
+                   <span className="text-slate-900 dark:text-white font-bold">{loadResult.totalWeight.toLocaleString()} kg</span>
                 </div>
-                <div className="flex justify-between items-center">
-                   <span className="text-slate-300">Remaining Space</span>
-                   <span className="text-white font-bold">{(100 - loadResult.volumeUtilization).toFixed(1)}%</span>
-                </div>
-                <div className="flex justify-between items-center pt-2 border-t border-white/10">
-                   <span className="text-slate-300">Volume Occupied</span>
-                   <span className="text-blue-400 font-bold">{(loadResult.totalWeight * 0.8).toFixed(2)} ft³</span>
+                <div className="flex justify-between items-center pt-1 border-t border-slate-200 dark:border-slate-800">
+                   <span className="text-slate-500 dark:text-slate-400">Center of Gravity</span>
+                   <span className="text-emerald-600 dark:text-emerald-400 font-bold">STABLE</span>
                 </div>
              </div>
-          </div>
-        )}
-
-        {loadResult && (
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-950/85 backdrop-blur-md p-4 rounded-xl border border-white/10 flex flex-col gap-4 shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-20 pointer-events-none w-[360px]">
-            {/* Slider 1: CG Limits */}
-            <div className="flex flex-col gap-1">
-              <div className="flex justify-between text-[10px] text-slate-400 font-semibold tracking-wider uppercase">
-                <span>Center of Gravity (CG)</span>
-                <span className="text-orange-400 font-mono">{(loadResult.centerOfGravity.x / 100).toFixed(2)}m</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] text-slate-400 font-mono">aftLimit</span>
-                <div className="flex-grow h-2.5 bg-red-600/40 rounded-sm relative">
-                  {/* Green Safe Zone: 30% to 60% */}
-                  <div className="absolute left-[30%] right-[40%] top-0 bottom-0 bg-green-500/80 rounded-sm"></div>
-                  {/* CG Marker */}
-                  <div 
-                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-white rounded-full border border-slate-900 shadow-[0_0_8px_rgba(255,255,255,0.8)]"
-                    style={{ left: `${Math.max(5, Math.min(95, (loadResult.centerOfGravity.x / selectedPlane.dimensions.length) * 100))}%` }}
-                  ></div>
-                </div>
-                <span className="text-[10px] text-slate-400 font-mono">fwdLimit</span>
-              </div>
-            </div>
-
-            <div className="h-px bg-white/10 w-full"></div>
-
-            {/* Slider 2: Optimal Trim */}
-            <div className="flex flex-col gap-1">
-              <div className="flex justify-between text-[10px] text-slate-400 font-semibold tracking-wider uppercase">
-                <span>Trim Adjustment</span>
-                <span className="text-emerald-400 font-mono">
-                  {Math.abs((loadResult.centerOfGravity.x / selectedPlane.dimensions.length) * 100 - 45) < 15 ? 'IN BALANCE' : 'WARN: UNBALANCED'}
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] text-slate-400 font-mono">aftLimit</span>
-                <div className="flex-grow h-2.5 bg-red-600/40 rounded-sm relative">
-                  {/* Green Safe Zone: 30% to 60% */}
-                  <div className="absolute left-[30%] right-[40%] top-0 bottom-0 bg-green-500/80 rounded-sm"></div>
-                  {/* Optimal Trim Point (Triangle Arrow at 45%) */}
-                  <div className="absolute bottom-[-10px] left-[45%] -translate-x-1/2 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[10px] border-b-white w-0 h-0"></div>
-                  {/* CG Marker */}
-                  <div 
-                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-white rounded-full border border-slate-900 shadow-[0_0_8px_rgba(255,255,255,0.8)]"
-                    style={{ left: `${Math.max(5, Math.min(95, (loadResult.centerOfGravity.x / selectedPlane.dimensions.length) * 100))}%` }}
-                  ></div>
-                </div>
-                <span className="text-[10px] text-slate-400 font-mono">fwdLimit</span>
-              </div>
-            </div>
           </div>
         )}
       </div>
