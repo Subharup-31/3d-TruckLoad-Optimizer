@@ -10,8 +10,9 @@ import { OpenRouterService } from '../services/openrouter';
 import { LoadAiInsightPanel } from '../components/LoadAiInsightPanel';
 import { CoGIndicator } from '../components/CoGIndicator';
 import { Truck, Item, PlacedItem, LoadResult, RouteStop } from '../types';
-import { Box, AlertCircle, RefreshCw, Camera, RotateCw, Loader2 } from 'lucide-react';
+import { Box, AlertCircle, RefreshCw, Camera, RotateCw, Loader2, FileText, Download, FileCheck } from 'lucide-react';
 import { TRUCK_OPTIONS } from '../constants';
+import { PdfExportService } from '../services/pdfExport';
 
 // -- 3D COMPONENTS --
 
@@ -539,7 +540,7 @@ export const Optimizer: React.FC = () => {
 
         <div className="mb-6">
             <button 
-                onClick={handleOptimize}
+                onClick={() => handleOptimize()}
                 disabled={isCalculating}
                 className="w-full bg-brand-600 dark:bg-brand-700 text-white py-3 rounded font-bold hover:bg-brand-700 dark:hover:bg-brand-600 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed transition-colors"
             >
@@ -558,43 +559,43 @@ export const Optimizer: React.FC = () => {
         {result && metrics && (
             <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
-                        <p className="text-xs text-blue-800 font-semibold">Space Utilized</p>
-                        <div className="text-lg font-bold text-blue-600">{result.volumeUtilization.toFixed(1)}%</div>
+                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800/40">
+                        <p className="text-xs text-blue-800 dark:text-blue-300 font-semibold">Space Utilized</p>
+                        <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{result.volumeUtilization.toFixed(1)}%</div>
                     </div>
                     
-                    <div className="p-3 bg-green-50 rounded-lg border border-green-100">
-                        <p className="text-xs text-green-800 font-semibold">Remaining Space</p>
-                        <div className="text-lg font-bold text-green-600">{metrics.remainingVolumeCubicFeet.toFixed(2)} ft³</div>
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-100 dark:border-emerald-800/40">
+                        <p className="text-xs text-emerald-800 dark:text-emerald-300 font-semibold">Remaining Space</p>
+                        <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{metrics.remainingVolumeCubicFeet.toFixed(2)} ft³</div>
                     </div>
                     
-                    <div className="p-3 bg-purple-50 rounded-lg border border-purple-100">
-                        <p className="text-xs text-purple-800 font-semibold">Items Placed</p>
-                        <div className="text-lg font-bold text-purple-600">{metrics.placedItemsCount}</div>
+                    <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl border border-purple-100 dark:border-purple-800/40">
+                        <p className="text-xs text-purple-800 dark:text-purple-300 font-semibold">Items Placed</p>
+                        <div className="text-lg font-bold text-purple-600 dark:text-purple-400">{metrics.placedItemsCount}</div>
                     </div>
                     
-                    <div className="p-3 bg-orange-50 rounded-lg border border-orange-100">
-                        <p className="text-xs text-orange-800 font-semibold">Items Unplaced</p>
-                        <div className="text-lg font-bold text-orange-600">{metrics.unplacedItemsCount}</div>
+                    <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-100 dark:border-amber-800/40">
+                        <p className="text-xs text-amber-800 dark:text-amber-300 font-semibold">Items Unplaced</p>
+                        <div className="text-lg font-bold text-amber-600 dark:text-amber-400">{metrics.unplacedItemsCount}</div>
                     </div>
                 </div>
                 
-                <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-100 mb-2">
-                    <p className="text-xs text-indigo-800 font-semibold">Volume Occupied</p>
-                    <div className="text-lg font-bold text-indigo-600">{metrics.usedVolumeCubicFeet.toFixed(2)} ft³</div>
+                <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-800/40 mb-2">
+                    <p className="text-xs text-indigo-800 dark:text-indigo-300 font-semibold">Volume Occupied</p>
+                    <div className="text-lg font-bold text-indigo-600 dark:text-indigo-400">{metrics.usedVolumeCubicFeet.toFixed(2)} ft³</div>
                 </div>
                 
                 {result.weightUtilization !== undefined && (
-                  <div className="p-3 bg-rose-50 rounded-lg border border-rose-100 mb-2">
-                      <p className="text-xs text-rose-800 font-semibold">Weight Utilized ({result.totalWeight || 0}kg)</p>
+                  <div className="p-3 bg-rose-50 dark:bg-rose-900/20 rounded-xl border border-rose-100 dark:border-rose-800/40 mb-2">
+                      <p className="text-xs text-rose-800 dark:text-rose-300 font-semibold">Weight Utilized ({result.totalWeight || 0}kg)</p>
                       <div className="flex items-center gap-2 mt-1">
-                        <div className="flex-1 h-2 bg-rose-200 rounded-full overflow-hidden">
+                        <div className="flex-1 h-2 bg-rose-200 dark:bg-rose-900/40 rounded-full overflow-hidden">
                           <div 
                             className={`h-full ${result.weightUtilization > 90 ? 'bg-red-500' : 'bg-rose-500'}`} 
                             style={{ width: `${Math.min(100, result.weightUtilization)}%` }}
                           ></div>
                         </div>
-                        <span className="text-xs font-bold text-rose-700">{result.weightUtilization.toFixed(1)}%</span>
+                        <span className="text-xs font-bold text-rose-700 dark:text-rose-400">{result.weightUtilization.toFixed(1)}%</span>
                       </div>
                   </div>
                 )}
@@ -698,6 +699,41 @@ export const Optimizer: React.FC = () => {
                             </button>
                         </div>
                     )}
+                </div>
+
+                {/* 1-Click PDF Export & Documentation Hub */}
+                <div className="p-3.5 bg-gradient-to-br from-indigo-50/80 to-blue-50/80 dark:from-indigo-950/30 dark:to-slate-900 border border-indigo-200/80 dark:border-indigo-800/60 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+                      <FileCheck className="w-4 h-4 text-brand-600 dark:text-brand-400" />
+                      Official Cargo Documentation
+                    </span>
+                    <span className="text-[10px] uppercase font-mono tracking-wider px-1.5 py-0.5 rounded bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 font-semibold">
+                      PDF Exports
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2 pt-1">
+                    <button
+                      onClick={() => selectedTruck && result && PdfExportService.generate3DLoadManifestPdf(selectedTruck, result, items, 'truck')}
+                      className="w-full bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 text-slate-800 dark:text-white border border-slate-300 dark:border-slate-700 px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 shadow-sm transition"
+                    >
+                      <Download className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" />
+                      Download 3D Load Manifest (PDF)
+                    </button>
+
+                    <button
+                      onClick={() => selectedTruck && PdfExportService.generateGstEWayBillPdf({
+                        vehicleNo: `${selectedTruck.name} (${selectedTruck.id})`,
+                        approxDistanceKm: 380,
+                        totalValueInr: result.placedItems.length * 12500
+                      })}
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 shadow-sm transition"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      Generate GST e-Way Bill (PDF)
+                    </button>
+                  </div>
                 </div>
 
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
