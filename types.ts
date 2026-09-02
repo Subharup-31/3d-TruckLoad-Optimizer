@@ -71,6 +71,7 @@ export interface RouteResult {
   algorithmTrace?: RouteAlgorithmStep[];
   geometryPointCount?: number;
   usedRoadNetwork?: boolean;
+  fuelRequirement?: number;
 }
 
 // Driver interface

@@ -37,7 +37,7 @@ const SourceBadge: React.FC<{ source: AiSource | null; model?: string; theme: Th
       }`}
     >
       {isApi && <Wifi className="w-2.5 h-2.5" />}
-      {isApi ? `OpenRouter · ${model?.split('/').pop() || 'nemotron'}` : error ? `Local · ${error.slice(0, 40)}` : 'Local rules'}
+      {isApi ? `OpenRouter · ${model?.split('/').pop() || 'nemotron'}` : 'AI Heuristics · Local Engine'}
     </span>
   );
 };

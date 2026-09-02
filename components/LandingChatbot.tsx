@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send, Bot, User, Sparkles, HelpCircle } from 'lucide-react';
 import { OpenRouterService } from '../services/openrouter';
+import { ApiClient } from '../services/apiClient';
 
 interface ChatMessage {
   sender: 'user' | 'bot';
@@ -57,7 +58,19 @@ export const LandingChatbot: React.FC = () => {
     setIsTyping(true);
 
     try {
-      // Map history to OpenRouter standard OpenAI format
+      // 1. Try Backend Grounded AI Assistant with Database Tools
+      const backendRes = await ApiClient.sendChatMessage(text);
+      if (backendRes && backendRes.response) {
+        setMessages(prev => [...prev, { sender: 'bot', text: backendRes.response }]);
+        setIsTyping(false);
+        return;
+      }
+    } catch (err) {
+      console.warn('Backend Chat API fallback:', err);
+    }
+
+    try {
+      // 2. Fallback to OpenRouter Client
       const history = messages.map(m => ({
         role: m.sender === 'user' ? 'user' as const : 'assistant' as const,
         content: m.text

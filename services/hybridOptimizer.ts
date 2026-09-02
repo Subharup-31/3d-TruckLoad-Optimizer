@@ -65,7 +65,7 @@ const assignItemsToStops = (items: Item[], stops: RouteStop[]): StopItemAssignme
 
   // Group items by their city if possible, fallback to round-robin
   items.forEach((item, idx) => {
-    const targetCity = item.city || item.destination || '';
+    const targetCity = item.city || (item as any).destination || '';
     const matchIdx = assignments.findIndex(a => 
       a.stop.city.toLowerCase().includes(targetCity.toLowerCase()) || 
       targetCity.toLowerCase().includes(a.stop.city.toLowerCase())

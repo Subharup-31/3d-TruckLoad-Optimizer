@@ -26,8 +26,8 @@ export const Navbar: React.FC = () => {
   ];
 
   const driverNavItems = [
-    { name: 'My Deliveries', path: '/driver' },
-    { name: 'Messages', path: '/driver#messages' },
+    { name: 'My Deliveries', path: '/driver', icon: <Truck className="w-5 h-5" /> },
+    { name: 'Messages', path: '/driver#messages', icon: <Package className="w-5 h-5" /> },
   ];
 
   const dealerNavItems = [
