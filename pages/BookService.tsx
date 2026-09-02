@@ -200,28 +200,28 @@ export const BookService: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-slate-950">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
             {/* Animated background gradients */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute top-0 -left-4 w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
-                <div className="absolute top-0 -right-4 w-96 h-96 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
-                <div className="absolute -bottom-8 left-20 w-96 h-96 bg-pink-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
+                <div className="absolute top-0 -left-4 w-96 h-96 bg-purple-500/10 dark:bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
+                <div className="absolute top-0 -right-4 w-96 h-96 bg-blue-500/10 dark:bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
+                <div className="absolute -bottom-8 left-20 w-96 h-96 bg-pink-500/10 dark:bg-pink-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
             </div>
 
             {/* Header */}
-            <header className="relative z-10 backdrop-blur-sm bg-slate-900/50 border-b border-slate-800">
+            <header className="relative z-10 backdrop-blur-sm bg-white/80 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex justify-between items-center">
                     <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
-                        <div className="bg-gradient-to-br from-blue-500 to-purple-600 p-2 rounded-xl">
+                        <div className="bg-gradient-to-br from-blue-500 to-purple-600 p-2 rounded-xl shadow-md">
                             <Truck className="w-7 h-7 text-white" />
                         </div>
-                        <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                        <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400 bg-clip-text text-transparent">
                             LogiLoad Booking
                         </h1>
                     </div>
                     <button
                         onClick={() => navigate('/')}
-                        className="flex items-center text-slate-300 hover:text-white font-medium transition-colors"
+                        className="flex items-center text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium transition-colors"
                     >
                         <ArrowLeft className="h-4 w-4 mr-1" />
                         Back to Home
@@ -230,7 +230,7 @@ export const BookService: React.FC = () => {
             </header>
 
             <main className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <div className="bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-3xl shadow-2xl overflow-hidden">
+                <div className="bg-white dark:bg-slate-900/80 backdrop-blur-sm border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xl overflow-hidden">
                     <div className="bg-gradient-to-r from-blue-600 to-purple-600 px-8 py-8">
                         <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-4 py-2 mb-4">
                             <Sparkles className="w-4 h-4 text-white" />
@@ -242,14 +242,14 @@ export const BookService: React.FC = () => {
 
                     <form onSubmit={handleSubmit} className="p-8 space-y-8">
                         {/* Contact Details */}
-                        <div className="bg-slate-800/30 border border-slate-700 rounded-2xl p-6">
-                            <h3 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-                                <User className="w-5 h-5 text-blue-400" />
+                        <div className="bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-700 rounded-2xl p-6">
+                            <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                                <User className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                                 Contact Information
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                                         Full Name
                                     </label>
                                     <input
@@ -257,12 +257,12 @@ export const BookService: React.FC = () => {
                                         required
                                         value={formData.customerName}
                                         onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                                        className="w-full border border-slate-700 bg-slate-900/50 text-white placeholder-slate-500 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                        className="w-full border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900/50 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
                                         placeholder="John Doe"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                                         Phone Number
                                     </label>
                                     <input
@@ -270,7 +270,7 @@ export const BookService: React.FC = () => {
                                         required
                                         value={formData.customerPhone}
                                         onChange={(e) => setFormData({ ...formData, customerPhone: e.target.value })}
-                                        className="w-full border border-slate-700 bg-slate-900/50 text-white placeholder-slate-500 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                        className="w-full border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900/50 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
                                         placeholder="+91 98765 43210"
                                     />
                                 </div>
@@ -278,14 +278,14 @@ export const BookService: React.FC = () => {
                         </div>
 
                         {/* Locations */}
-                        <div className="bg-slate-800/30 border border-slate-700 rounded-2xl p-6">
-                            <h3 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-                                <MapPin className="w-5 h-5 text-green-400" />
+                        <div className="bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-700 rounded-2xl p-6">
+                            <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                                <MapPin className="w-5 h-5 text-emerald-600 dark:text-green-400" />
                                 Delivery Details
                             </h3>
                             <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                                         Pickup Location
                                     </label>
                                     <input
@@ -293,12 +293,12 @@ export const BookService: React.FC = () => {
                                         required
                                         value={formData.pickupLocation}
                                         onChange={(e) => setFormData({ ...formData, pickupLocation: e.target.value })}
-                                        className="w-full border border-slate-700 bg-slate-900/50 text-white placeholder-slate-500 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                        className="w-full border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900/50 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
                                         placeholder="Enter pickup address"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                                         Drop Location
                                     </label>
                                     <input
@@ -306,12 +306,12 @@ export const BookService: React.FC = () => {
                                         required
                                         value={formData.dropLocation}
                                         onChange={(e) => setFormData({ ...formData, dropLocation: e.target.value })}
-                                        className="w-full border border-slate-700 bg-slate-900/50 text-white placeholder-slate-500 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                        className="w-full border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900/50 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
                                         placeholder="Enter drop address"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                                         Scheduled Date & Time
                                     </label>
                                     <input
@@ -319,22 +319,22 @@ export const BookService: React.FC = () => {
                                         required
                                         value={formData.scheduledTime}
                                         onChange={(e) => setFormData({ ...formData, scheduledTime: e.target.value })}
-                                        className="w-full border border-slate-700 bg-slate-900/50 text-white placeholder-slate-500 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                        className="w-full border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900/50 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
                                     />
                                 </div>
                             </div>
                         </div>
 
                         {/* Input Mode Toggle */}
-                        <div className="bg-slate-800/30 border border-slate-700 rounded-2xl p-6">
-                            <h3 className="text-xl font-semibold text-white mb-6">Add Items</h3>
+                        <div className="bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-700 rounded-2xl p-6">
+                            <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-6">Add Items</h3>
                             <div className="flex gap-4 mb-6">
                                 <button
                                     type="button"
                                     onClick={() => setInputMode('manual')}
                                     className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${inputMode === 'manual'
-                                            ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/30'
-                                            : 'bg-slate-800 text-slate-300 hover:bg-slate-750 border border-slate-700'
+                                            ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md shadow-blue-500/30'
+                                            : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
                                         }`}
                                 >
                                     <Package className="w-5 h-5 inline-block mr-2" />
@@ -344,8 +344,8 @@ export const BookService: React.FC = () => {
                                     type="button"
                                     onClick={() => setInputMode('excel')}
                                     className={`flex-1 py-3 px-4 rounded-xl font-semibold transition-all ${inputMode === 'excel'
-                                            ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/30'
-                                            : 'bg-slate-800 text-slate-300 hover:bg-slate-750 border border-slate-700'
+                                            ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md shadow-blue-500/30'
+                                            : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
                                         }`}
                                 >
                                     <FileSpreadsheet className="w-5 h-5 inline-block mr-2" />
@@ -356,8 +356,8 @@ export const BookService: React.FC = () => {
                             {/* Manual Item Entry */}
                             {inputMode === 'manual' && (
                                 <div className="space-y-6">
-                                    <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-6">
-                                        <h4 className="text-base font-semibold text-white mb-4">
+                                    <div className="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl p-6 shadow-sm">
+                                        <h4 className="text-base font-semibold text-slate-900 dark:text-white mb-4">
                                             {editingItemId ? 'Edit Item Details' : 'New Item Details'}
                                         </h4>
 
@@ -365,21 +365,21 @@ export const BookService: React.FC = () => {
                                             {/* Left Column */}
                                             <div className="space-y-4">
                                                 <div>
-                                                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                                                         Item Name
                                                     </label>
                                                     <input
                                                         type="text"
                                                         value={currentItem.name}
                                                         onChange={(e) => setCurrentItem({ ...currentItem, name: e.target.value })}
-                                                        className="w-full border border-slate-700 bg-slate-800/50 text-white placeholder-slate-500 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                        className="w-full border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
                                                         placeholder="e.g., 55 inch TV Box"
                                                     />
                                                 </div>
 
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div>
-                                                        <label className="block text-sm font-medium text-slate-300 mb-2">
+                                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                                                             Quantity
                                                         </label>
                                                         <input
@@ -387,11 +387,11 @@ export const BookService: React.FC = () => {
                                                             min="1"
                                                             value={currentItem.quantity}
                                                             onChange={(e) => setCurrentItem({ ...currentItem, quantity: Number(e.target.value) })}
-                                                            className="w-full border border-slate-700 bg-slate-800/50 text-white rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                            className="w-full border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-slate-900 dark:text-white rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
                                                         />
                                                     </div>
                                                     <div>
-                                                        <label className="block text-sm font-medium text-slate-300 mb-2">
+                                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                                                             Weight (kg)
                                                         </label>
                                                         <input
@@ -400,7 +400,7 @@ export const BookService: React.FC = () => {
                                                             step="0.1"
                                                             value={currentItem.weight}
                                                             onChange={(e) => setCurrentItem({ ...currentItem, weight: Number(e.target.value) })}
-                                                            className="w-full border border-slate-700 bg-slate-800/50 text-white placeholder-slate-500 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                            className="w-full border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
                                                             placeholder="e.g., 25.5"
                                                         />
                                                     </div>
@@ -412,18 +412,18 @@ export const BookService: React.FC = () => {
                                                             type="checkbox"
                                                             checked={currentItem.fragile}
                                                             onChange={(e) => setCurrentItem({ ...currentItem, fragile: e.target.checked })}
-                                                            className="w-4 h-4 text-blue-600 border-slate-600 rounded focus:ring-blue-500"
+                                                            className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
                                                         />
-                                                        <span className="text-sm text-slate-300">Fragile</span>
+                                                        <span className="text-sm text-slate-700 dark:text-slate-300">Fragile</span>
                                                     </label>
                                                     <label className="flex items-center gap-2 cursor-pointer">
                                                         <input
                                                             type="checkbox"
                                                             checked={currentItem.stackable}
                                                             onChange={(e) => setCurrentItem({ ...currentItem, stackable: e.target.checked })}
-                                                            className="w-4 h-4 text-blue-600 border-slate-600 rounded focus:ring-blue-500"
+                                                            className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
                                                         />
-                                                        <span className="text-sm text-slate-300">Stackable</span>
+                                                        <span className="text-sm text-slate-700 dark:text-slate-300">Stackable</span>
                                                     </label>
                                                 </div>
                                             </div>
@@ -432,17 +432,17 @@ export const BookService: React.FC = () => {
                                             <div className="space-y-4">
                                                 <div className="flex items-center justify-between mb-2">
                                                     <div className="flex items-center gap-2">
-                                                        <Package className="w-4 h-4 text-blue-400" />
-                                                        <label className="text-sm font-medium text-slate-300">
+                                                        <Package className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
                                                             Dimensions (L x W x H)
                                                         </label>
                                                     </div>
                                                     <button
                                                         type="button"
                                                         onClick={() => setShowScanner(true)}
-                                                        className="text-xs flex items-center gap-1 bg-blue-600/10 hover:bg-blue-600/25 border border-blue-500/25 px-2 py-1 rounded text-blue-400 font-semibold transition"
+                                                        className="text-xs flex items-center gap-1 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-500/20 px-2 py-1 rounded text-blue-600 dark:text-blue-400 font-semibold transition"
                                                     >
-                                                        <Sparkles className="w-3 h-3 text-blue-300" /> AI Scan
+                                                        <Sparkles className="w-3 h-3 text-blue-600 dark:text-blue-300" /> AI Scan
                                                     </button>
                                                 </div>
                                                 <div className="grid grid-cols-3 gap-3">
@@ -456,7 +456,7 @@ export const BookService: React.FC = () => {
                                                                 ...currentItem,
                                                                 dimensions: { ...currentItem.dimensions, length: Number(e.target.value) }
                                                             })}
-                                                            className="w-full border border-slate-700 bg-slate-800/50 text-white rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                            className="w-full border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-slate-900 dark:text-white rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
                                                             placeholder="0"
                                                         />
                                                     </div>
@@ -470,7 +470,7 @@ export const BookService: React.FC = () => {
                                                                 ...currentItem,
                                                                 dimensions: { ...currentItem.dimensions, width: Number(e.target.value) }
                                                             })}
-                                                            className="w-full border border-slate-700 bg-slate-800/50 text-white rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                            className="w-full border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-slate-900 dark:text-white rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
                                                             placeholder="0"
                                                         />
                                                     </div>
@@ -484,7 +484,7 @@ export const BookService: React.FC = () => {
                                                                 ...currentItem,
                                                                 dimensions: { ...currentItem.dimensions, height: Number(e.target.value) }
                                                             })}
-                                                            className="w-full border border-slate-700 bg-slate-800/50 text-white rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                                            className="w-full border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/50 text-slate-900 dark:text-white rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
                                                             placeholder="0"
                                                         />
                                                     </div>
@@ -493,18 +493,18 @@ export const BookService: React.FC = () => {
                                         </div>
 
                                         {/* Actions */}
-                                        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-700">
+                                        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
                                             <button
                                                 type="button"
                                                 onClick={handleCancelEdit}
-                                                className="px-6 py-2 border border-slate-700 text-slate-300 rounded-lg font-medium hover:bg-slate-800 transition-colors"
+                                                className="px-6 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-lg font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                                             >
                                                 Cancel
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={handleSaveItem}
-                                                className="px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition-colors shadow-lg hover:shadow-blue-500/30"
+                                                className="px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition-colors shadow-md hover:shadow-blue-500/30"
                                             >
                                                 {editingItemId ? 'Update Item' : 'Save Item'}
                                             </button>
@@ -513,25 +513,25 @@ export const BookService: React.FC = () => {
 
                                     {/* Items List */}
                                     {items.length > 0 && (
-                                        <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-6">
-                                            <h4 className="text-base font-semibold text-white mb-4">
+                                        <div className="bg-white dark:bg-slate-800/30 border border-slate-200 dark:border-slate-700 rounded-xl p-6 shadow-sm">
+                                            <h4 className="text-base font-semibold text-slate-900 dark:text-white mb-4">
                                                 Added Items ({items.length})
                                             </h4>
                                             <div className="space-y-3">
                                                 {items.map((item) => (
-                                                    <div key={item.id} className="bg-slate-900/50 border border-slate-700 rounded-lg p-4 flex items-center justify-between hover:border-slate-600 transition-colors">
+                                                    <div key={item.id} className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-4 flex items-center justify-between hover:border-blue-500/30 transition-colors">
                                                         <div className="flex-1">
-                                                            <h5 className="font-semibold text-white">{item.name}</h5>
-                                                            <p className="text-sm text-slate-400 mt-1">
+                                                            <h5 className="font-semibold text-slate-900 dark:text-white">{item.name}</h5>
+                                                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                                                                 Qty: {item.quantity} | Weight: {item.weight}kg |
                                                                 Dimensions: {item.dimensions.length}×{item.dimensions.width}×{item.dimensions.height}cm
                                                             </p>
                                                             <div className="flex gap-2 mt-2">
                                                                 {item.fragile && (
-                                                                    <span className="text-xs bg-red-500/20 text-red-300 px-2 py-1 rounded border border-red-500/30">Fragile</span>
+                                                                    <span className="text-xs bg-red-500/10 text-red-600 dark:text-red-300 px-2 py-0.5 rounded border border-red-500/20">Fragile</span>
                                                                 )}
                                                                 {item.stackable && (
-                                                                    <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded border border-green-500/30">Stackable</span>
+                                                                    <span className="text-xs bg-emerald-500/10 text-emerald-600 dark:text-green-300 px-2 py-0.5 rounded border border-emerald-500/20">Stackable</span>
                                                                 )}
                                                             </div>
                                                         </div>
@@ -539,14 +539,14 @@ export const BookService: React.FC = () => {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleEditItem(item)}
-                                                                className="p-2 text-blue-400 hover:bg-blue-500/20 rounded-lg transition-colors"
+                                                                className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
                                                             >
                                                                 <Edit2 className="w-4 h-4" />
                                                             </button>
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleDeleteItem(item.id)}
-                                                                className="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
+                                                                className="p-2 text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                                                             >
                                                                 <Trash2 className="w-4 h-4" />
                                                             </button>
@@ -561,13 +561,13 @@ export const BookService: React.FC = () => {
 
                             {/* Excel Upload */}
                             {inputMode === 'excel' && (
-                                <div className="border-2 border-dashed border-slate-700 rounded-2xl p-12 hover:bg-slate-800/30 hover:border-slate-600 transition-all cursor-pointer">
+                                <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl p-12 hover:bg-slate-50 dark:hover:bg-slate-800/30 hover:border-blue-400 transition-all cursor-pointer">
                                     <div className="text-center">
-                                        <FileSpreadsheet className="mx-auto h-16 w-16 text-slate-500 mb-4" />
-                                        <div className="mt-4 flex text-sm leading-6 text-slate-400 justify-center">
+                                        <FileSpreadsheet className="mx-auto h-16 w-16 text-slate-400 dark:text-slate-500 mb-4" />
+                                        <div className="mt-4 flex text-sm leading-6 text-slate-600 dark:text-slate-400 justify-center">
                                             <label
                                                 htmlFor="file-upload"
-                                                className="relative cursor-pointer rounded-md font-semibold text-blue-400 focus-within:outline-none hover:text-blue-300"
+                                                className="relative cursor-pointer rounded-md font-semibold text-blue-600 dark:text-blue-400 focus-within:outline-none hover:text-blue-500"
                                             >
                                                 <span>Upload a file</span>
                                                 <input
@@ -585,7 +585,7 @@ export const BookService: React.FC = () => {
                                     </div>
 
                                     {file && (
-                                        <div className={`mt-6 p-4 rounded-xl flex items-center gap-3 border ${uploadSuccess ? 'bg-green-500/10 text-green-300 border-green-500/30' : 'bg-blue-500/10 text-blue-300 border-blue-500/30'}`}>
+                                        <div className={`mt-6 p-4 rounded-xl flex items-center gap-3 border ${uploadSuccess ? 'bg-emerald-500/10 text-emerald-700 dark:text-green-300 border-emerald-500/30' : 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30'}`}>
                                             {isUploading ? (
                                                 <Upload className="w-5 h-5 animate-bounce" />
                                             ) : uploadSuccess ? (
@@ -606,7 +606,7 @@ export const BookService: React.FC = () => {
                         </div>
 
                         {error && (
-                            <div className="p-4 bg-red-500/10 text-red-300 rounded-xl border border-red-500/30 flex items-center gap-3">
+                            <div className="p-4 bg-red-500/10 text-red-600 dark:text-red-300 rounded-xl border border-red-500/30 flex items-center gap-3">
                                 <AlertCircle className="w-5 h-5" />
                                 <p className="text-sm">{error}</p>
                             </div>
@@ -617,7 +617,7 @@ export const BookService: React.FC = () => {
                             <button
                                 type="submit"
                                 disabled={(inputMode === 'excel' && (!uploadSuccess || isUploading)) || (inputMode === 'manual' && items.length === 0)}
-                                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 px-4 rounded-xl font-bold text-lg hover:from-blue-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-2xl hover:shadow-blue-500/50 hover:scale-[1.02]"
+                                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 px-4 rounded-xl font-bold text-lg hover:from-blue-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xl hover:shadow-blue-500/30 hover:scale-[1.01]"
                             >
                                 {isUploading ? 'Processing...' : 'Submit Booking Request'}
                             </button>

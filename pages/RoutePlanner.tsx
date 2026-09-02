@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { MapPin, Navigation, Plus, Search, AlertCircle, Locate, X, Cpu, Route as RouteIcon } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { MapPin, Navigation, Plus, Search, AlertCircle, Locate, X, Cpu, Route as RouteIcon, CreditCard, ShieldCheck, Coins } from 'lucide-react';
 import { optimizeRoute, reverseGeocodeAddress } from '../services/routing';
 import { RouteStop, RouteResult } from '../types';
 import { RouteMap } from '../components/RouteMap';
 import { LocationAutocomplete } from '../components/LocationAutocomplete';
+import { ApiClient, RouteOptimizationResult } from '../services/apiClient';
+import { TollService, TollCalculationResult } from '../services/tollCalculator';
 
 export const RoutePlanner: React.FC = () => {
   const [stops, setStops] = useState<RouteStop[]>([
@@ -12,10 +14,19 @@ export const RoutePlanner: React.FC = () => {
   ]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<RouteResult | null>(null);
+  const [aiResult, setAiResult] = useState<RouteOptimizationResult | null>(null);
   const [error, setError] = useState<string>('');
   const [detectingLocation, setDetectingLocation] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number, lng: number, address: string } | null>(null);
-  const [routeMode, setRouteMode] = useState<'fastest' | 'eco'>('fastest');
+  const [routeMode, setRouteMode] = useState<'fastest' | 'eco' | 'gnn_ppo'>('gnn_ppo');
+
+  // Calculate NHAI FASTag toll costs along the route
+  const tollData: TollCalculationResult | null = useMemo(() => {
+    if (!result || stops.length < 2) return null;
+    const origin = stops[0].city || stops[0].address || 'Mumbai';
+    const dest = stops[stops.length - 1].city || stops[stops.length - 1].address || 'Pune';
+    return TollService.calculateRouteTolls(origin, dest, result.totalDistanceKm, 'tata-1109');
+  }, [result, stops]);
 
   useEffect(() => {
     detectUserLocation();
@@ -54,7 +65,31 @@ export const RoutePlanner: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await optimizeRoute('Start', stops, routeMode);
+      if (routeMode === 'gnn_ppo' && stops.length >= 2) {
+        try {
+          const originNode = {
+            id: 'orig',
+            address: stops[0].address || 'Origin',
+            city: stops[0].city || 'Mumbai',
+            lat: stops[0].lat || 19.0760,
+            lng: stops[0].lng || 72.8777
+          };
+          const stopNodes = stops.slice(1).map((s, idx) => ({
+            id: s.id || `stop-${idx}`,
+            address: s.address || `Stop ${idx + 1}`,
+            city: s.city || 'City',
+            lat: s.lat || 18.5204 + idx * 0.1,
+            lng: s.lng || 73.8567 + idx * 0.1
+          }));
+
+          const aiOpt = await ApiClient.optimizeRoute(originNode, stopNodes, 'gnn_ppo');
+          setAiResult(aiOpt);
+        } catch (aiErr) {
+          console.warn('Backend GNN+PPO route optimization fallback to standard OSRM:', aiErr);
+        }
+      }
+
+      const res = await optimizeRoute('Start', stops, routeMode === 'gnn_ppo' ? 'fastest' : routeMode);
       setResult(res);
     } catch (e: any) {
       setError(e.message || 'Failed to optimize route');
@@ -133,21 +168,39 @@ export const RoutePlanner: React.FC = () => {
         OSRM Trip optimizer on real road network — search any location worldwide
       </p>
 
-      <div className="flex gap-2 mb-6">
-        {(['fastest', 'eco'] as const).map(mode => (
+      <div className="flex flex-wrap gap-2 mb-6">
+        {(['gnn_ppo', 'fastest', 'eco'] as const).map(mode => (
           <button
             key={mode}
             onClick={() => setRouteMode(mode)}
-            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border ${
+            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border flex items-center gap-1.5 ${
               routeMode === mode
                 ? 'bg-brand-600 border-brand-500 text-white shadow-md'
                 : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-500 hover:border-brand-400'
             }`}
           >
-            {mode === 'fastest' ? 'Fastest (OSRM)' : 'Eco Route'}
+            {mode === 'gnn_ppo' && <Cpu className="w-3.5 h-3.5" />}
+            {mode === 'gnn_ppo' ? 'GNN + PPO AI Policy' : mode === 'fastest' ? 'Fastest (OSRM)' : 'Eco Route'}
           </button>
         ))}
       </div>
+
+      {aiResult && routeMode === 'gnn_ppo' && (
+        <div className="mb-6 p-4 bg-gradient-to-r from-purple-900/40 to-indigo-900/40 border border-purple-500/40 rounded-xl flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Cpu className="w-6 h-6 text-purple-400" />
+            <div>
+              <p className="text-sm font-bold text-white">GNN Corridor & PPO Optimization Active</p>
+              <p className="text-xs text-purple-200">
+                Predicted Transit Distance: {aiResult.total_distance_km} km | Est. Transport Cost: ₹{aiResult.estimated_cost_inr.toLocaleString()}
+              </p>
+            </div>
+          </div>
+          <span className="px-3 py-1 bg-purple-500/20 border border-purple-400/40 rounded-full text-xs font-extrabold text-purple-300">
+            {aiResult.improvement_vs_baseline_pct > 0 ? `+${aiResult.improvement_vs_baseline_pct}% AI Gain` : 'Optimal Route'}
+          </span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left: Inputs */}
@@ -266,6 +319,75 @@ export const RoutePlanner: React.FC = () => {
                   <p className="text-2xl font-bold">{Math.floor(result.totalDurationMins / 60)}h {result.totalDurationMins % 60}m</p>
                 </div>
               </div>
+
+              {/* NHAI FASTag Highway Toll Calculation Card */}
+              {tollData && (
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
+                        <CreditCard className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                          NHAI FASTag & Toll Gate Expense
+                          <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 font-bold">
+                            Live Matrix
+                          </span>
+                        </h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {tollData.tollPlazaCount} Commercial Toll Plazas · Corridors: {tollData.highwayCorridors.join(', ')}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <p className="text-xs text-slate-400 uppercase font-semibold">FASTag Deductible</p>
+                      <p className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">
+                        ₹ {tollData.totalTollCostInr.toLocaleString('en-IN')}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div className="bg-slate-50 dark:bg-slate-800/40 p-3 rounded-lg border border-slate-200/60 dark:border-slate-800">
+                      <p className="text-[10px] uppercase font-bold text-slate-400">Cash Penalty Avoided</p>
+                      <p className="text-sm font-bold text-slate-700 dark:text-slate-200 font-mono">
+                        +₹ {tollData.fastagSavingsInr.toLocaleString('en-IN')}
+                      </p>
+                    </div>
+                    <div className="bg-slate-50 dark:bg-slate-800/40 p-3 rounded-lg border border-slate-200/60 dark:border-slate-800">
+                      <p className="text-[10px] uppercase font-bold text-slate-400">Avg Toll / KM</p>
+                      <p className="text-sm font-bold text-slate-700 dark:text-slate-200 font-mono">
+                        ₹ {tollData.costPerKmInr} /km
+                      </p>
+                    </div>
+                    <div className="bg-slate-50 dark:bg-slate-800/40 p-3 rounded-lg border border-slate-200/60 dark:border-slate-800">
+                      <p className="text-[10px] uppercase font-bold text-slate-400">FASTag Cashless</p>
+                      <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 flex items-center justify-center gap-1">
+                        <ShieldCheck className="w-3.5 h-3.5" /> 100% Auto
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Crossed Plazas Chips */}
+                  <div className="space-y-1.5 pt-1">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Toll Plaza Breakdown:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {tollData.plazasCrossed.map((item) => (
+                        <span
+                          key={item.plaza.id}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                          <span className="font-medium">{item.plaza.name}</span>
+                          <span className="font-bold text-slate-500 font-mono">₹{item.vehicleFee}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Timeline */}
               <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
